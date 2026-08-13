@@ -137,6 +137,11 @@ export type CatalogEntry = {
   media: ExerciseMedia;
 };
 
+export type CatalogSeed = {
+  entries: CatalogEntry[];
+  relations: ExerciseRelation[];
+};
+
 export type ExerciseRelationType =
   | "progression"
   | "regression"
@@ -159,6 +164,9 @@ export type ExerciseRelation = {
 };
 
 export type CatalogValidationCode =
+  | "DUPLICATE_EXERCISE_ID"
+  | "DUPLICATE_EXERCISE_SLUG"
+  | "DUPLICATE_MEDIA_ID"
   | "MISSING_RELATION_SOURCE"
   | "MISSING_RELATION_TARGET"
   | "MISSING_RELATION_REASON"
