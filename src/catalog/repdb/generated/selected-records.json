@@ -1,0 +1,167 @@
+{
+  "source": {
+    "repository": "RepDB/exercise-dataset",
+    "commit": "045845b61e4aefd9e684fa84518b84c665ea3cd3",
+    "acquiredAt": "2026-08-13"
+  },
+  "records": [
+    {
+      "id": "dead-bug",
+      "images": {
+        "flat": {
+          "start": "images/flat/dead-bug-start.webp",
+          "peak": "images/flat/dead-bug-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "plank",
+      "images": {
+        "flat": {
+          "main": "images/flat/plank-main.webp"
+        }
+      }
+    },
+    {
+      "id": "high-plank",
+      "images": {
+        "flat": {
+          "main": "images/flat/high-plank-main.webp"
+        }
+      }
+    },
+    {
+      "id": "side-plank",
+      "images": {
+        "flat": {
+          "main": "images/flat/side-plank-main.webp"
+        }
+      }
+    },
+    {
+      "id": "bird-dog-hold",
+      "images": {
+        "flat": {
+          "main": "images/flat/bird-dog-hold-main.webp"
+        }
+      }
+    },
+    {
+      "id": "crunches",
+      "images": {
+        "flat": {
+          "start": "images/flat/crunches-start.webp",
+          "peak": "images/flat/crunches-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "sit-ups",
+      "images": {
+        "flat": {
+          "start": "images/flat/sit-ups-start.webp",
+          "peak": "images/flat/sit-ups-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "bicycle-crunch",
+      "images": {
+        "flat": {
+          "start": "images/flat/bicycle-crunch-start.webp",
+          "peak": "images/flat/bicycle-crunch-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "russian-twist",
+      "images": {
+        "flat": {
+          "start": "images/flat/russian-twist-start.webp",
+          "peak": "images/flat/russian-twist-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "mountain-climbers",
+      "images": {
+        "flat": {
+          "start": "images/flat/mountain-climbers-start.webp",
+          "peak": "images/flat/mountain-climbers-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "flutter-kicks",
+      "images": {
+        "flat": {
+          "start": "images/flat/flutter-kicks-start.webp",
+          "peak": "images/flat/flutter-kicks-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "lying-leg-raise",
+      "images": {
+        "flat": {
+          "start": "images/flat/lying-leg-raise-start.webp",
+          "peak": "images/flat/lying-leg-raise-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "glute-bridge",
+      "images": {
+        "flat": {
+          "start": "images/flat/glute-bridge-start.webp",
+          "peak": "images/flat/glute-bridge-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "glute-kickback",
+      "images": {
+        "flat": {
+          "start": "images/flat/glute-kickback-start.webp",
+          "peak": "images/flat/glute-kickback-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "clamshells",
+      "images": {
+        "flat": {
+          "start": "images/flat/clamshells-start.webp",
+          "peak": "images/flat/clamshells-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "side-lying-hip-abduction",
+      "images": {
+        "flat": {
+          "start": "images/flat/side-lying-hip-abduction-start.webp",
+          "peak": "images/flat/side-lying-hip-abduction-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "bodyweight-good-morning",
+      "images": {
+        "flat": {
+          "start": "images/flat/bodyweight-good-morning-start.webp",
+          "peak": "images/flat/bodyweight-good-morning-peak.webp"
+        }
+      }
+    },
+    {
+      "id": "superman",
+      "images": {
+        "flat": {
+          "start": "images/flat/superman-start.webp",
+          "peak": "images/flat/superman-peak.webp"
+        }
+      }
+    }
+  ]
+}

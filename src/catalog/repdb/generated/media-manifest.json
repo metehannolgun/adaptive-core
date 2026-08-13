@@ -1,0 +1,130 @@
+{
+  "images/flat/bicycle-crunch-peak.webp": {
+    "localPath": "assets/exercises/repdb/bicycle-crunch-peak.webp",
+    "checksum": "sha256:a9e644eac66fd8a8deb5bee71334a3b7a0cf6f320b46e4020bd2bcba06e95db6"
+  },
+  "images/flat/bicycle-crunch-start.webp": {
+    "localPath": "assets/exercises/repdb/bicycle-crunch-start.webp",
+    "checksum": "sha256:3f78f0ace39951b17b06c6012648d3e6f86c92c54ab32e4b08bb5f2a656c2692"
+  },
+  "images/flat/bird-dog-hold-main.webp": {
+    "localPath": "assets/exercises/repdb/bird-dog-hold-main.webp",
+    "checksum": "sha256:456923f6894e9737d927aae44261687f939c4f1a9d23d8018ace55bd9a9c8b5e"
+  },
+  "images/flat/bodyweight-good-morning-peak.webp": {
+    "localPath": "assets/exercises/repdb/bodyweight-good-morning-peak.webp",
+    "checksum": "sha256:5a33f09ea9efa3dec53e1a73e62b8d79bdbf4dce41b11e7b5b511e7bdf851166"
+  },
+  "images/flat/bodyweight-good-morning-start.webp": {
+    "localPath": "assets/exercises/repdb/bodyweight-good-morning-start.webp",
+    "checksum": "sha256:e559b3159bc804912fe2bf3bc07d24f23b80ad1a20ccbf4aac4314f70091ca3e"
+  },
+  "images/flat/clamshells-peak.webp": {
+    "localPath": "assets/exercises/repdb/clamshells-peak.webp",
+    "checksum": "sha256:ffd6bce228153e58d5096a5bccef6f13b6c35e4c6d666fe1ca8de9918fa761af"
+  },
+  "images/flat/clamshells-start.webp": {
+    "localPath": "assets/exercises/repdb/clamshells-start.webp",
+    "checksum": "sha256:4a82826e19a14941a2fa4dbf6c2b1fd794ff678638d9bb2263131e704c8812b5"
+  },
+  "images/flat/crunches-peak.webp": {
+    "localPath": "assets/exercises/repdb/crunches-peak.webp",
+    "checksum": "sha256:be9f8794c3a9b8a5f7337d09d91a79355cc627ad30605a6a6538990b2d2c20bb"
+  },
+  "images/flat/crunches-start.webp": {
+    "localPath": "assets/exercises/repdb/crunches-start.webp",
+    "checksum": "sha256:54aafb1a0490f6e6ea8cfbf575e611c3ed033730176f6605b1b981797b8772e4"
+  },
+  "images/flat/dead-bug-peak.webp": {
+    "localPath": "assets/exercises/repdb/dead-bug-peak.webp",
+    "checksum": "sha256:cd83d2f7aec12bfc04eafbdf6b2067443dd7194f1a34bb53ed8f79e67ad3f187"
+  },
+  "images/flat/dead-bug-start.webp": {
+    "localPath": "assets/exercises/repdb/dead-bug-start.webp",
+    "checksum": "sha256:9fd217b722f1b49607903917c554e7532dfb77266f67543efc76ed416c3e434c"
+  },
+  "images/flat/flutter-kicks-peak.webp": {
+    "localPath": "assets/exercises/repdb/flutter-kicks-peak.webp",
+    "checksum": "sha256:edcd997e76847da4c5f76eaf0baa79c4ec7e49b8d0c840e69ec46b65572f69c1"
+  },
+  "images/flat/flutter-kicks-start.webp": {
+    "localPath": "assets/exercises/repdb/flutter-kicks-start.webp",
+    "checksum": "sha256:067a0c1781ec8f58416d72ec89836370c2d34b40450f538d8cac5b6e389b4eef"
+  },
+  "images/flat/glute-bridge-peak.webp": {
+    "localPath": "assets/exercises/repdb/glute-bridge-peak.webp",
+    "checksum": "sha256:e0f8f505ed78bb84f866c4d744abd9132795f0fdf7bba4547a85b8dbd24e3f92"
+  },
+  "images/flat/glute-bridge-start.webp": {
+    "localPath": "assets/exercises/repdb/glute-bridge-start.webp",
+    "checksum": "sha256:34e09155d083bea5bb55e235cd5b9d61a13b302d6bc721fe01540304efc00e3d"
+  },
+  "images/flat/glute-kickback-peak.webp": {
+    "localPath": "assets/exercises/repdb/glute-kickback-peak.webp",
+    "checksum": "sha256:5db231a7e86df328ff187c9d21508045c5d03ba7896e7c39c45cfba3848d2d5d"
+  },
+  "images/flat/glute-kickback-start.webp": {
+    "localPath": "assets/exercises/repdb/glute-kickback-start.webp",
+    "checksum": "sha256:e4ba7cf63b8a60e83da016e392102da18b80299a7fa382441c9800be0061e766"
+  },
+  "images/flat/high-plank-main.webp": {
+    "localPath": "assets/exercises/repdb/high-plank-main.webp",
+    "checksum": "sha256:6ff08cbab2cb993aab34ee10af8543ae2e8d96d4386e1c9c3714e178584ad1df"
+  },
+  "images/flat/lying-leg-raise-peak.webp": {
+    "localPath": "assets/exercises/repdb/lying-leg-raise-peak.webp",
+    "checksum": "sha256:5fb535aca720818ebcae85b39889d7c17b507f7460a51e350ae6d201b47680c7"
+  },
+  "images/flat/lying-leg-raise-start.webp": {
+    "localPath": "assets/exercises/repdb/lying-leg-raise-start.webp",
+    "checksum": "sha256:85481e15b39c37297795e1f3021119644272fd43af389b78f7e329c686de569a"
+  },
+  "images/flat/mountain-climbers-peak.webp": {
+    "localPath": "assets/exercises/repdb/mountain-climbers-peak.webp",
+    "checksum": "sha256:8dd7f77ab3106dfb0cb1a7f2bac7e663a41342a09efa7bb8082caa733c45f04b"
+  },
+  "images/flat/mountain-climbers-start.webp": {
+    "localPath": "assets/exercises/repdb/mountain-climbers-start.webp",
+    "checksum": "sha256:140332bb263e70bfe63157f34fe88f6e4d6d81e6350673f93ccfac96feaf723f"
+  },
+  "images/flat/plank-main.webp": {
+    "localPath": "assets/exercises/repdb/plank-main.webp",
+    "checksum": "sha256:cfa10a00babd09bce62e5953007fc4b322757fda54d7379c3042acc27676263e"
+  },
+  "images/flat/russian-twist-peak.webp": {
+    "localPath": "assets/exercises/repdb/russian-twist-peak.webp",
+    "checksum": "sha256:53af13e44c67b449a9bd62c0ad045b10e35878dd97cd712e620ee2b3ecfe2b09"
+  },
+  "images/flat/russian-twist-start.webp": {
+    "localPath": "assets/exercises/repdb/russian-twist-start.webp",
+    "checksum": "sha256:88daeb1d598efa922d06feea2cbff48ed0a8eb028fc64918849c9a8b877c797a"
+  },
+  "images/flat/side-lying-hip-abduction-peak.webp": {
+    "localPath": "assets/exercises/repdb/side-lying-hip-abduction-peak.webp",
+    "checksum": "sha256:eb87b16262682eda04014fb3b446a6e06c28bcee6e9f8cda0eae4d2f47634b0f"
+  },
+  "images/flat/side-lying-hip-abduction-start.webp": {
+    "localPath": "assets/exercises/repdb/side-lying-hip-abduction-start.webp",
+    "checksum": "sha256:899484ad8f24d15cd5345bae24221e8e787a43f8ba79b23aaeaaa1cd94862831"
+  },
+  "images/flat/side-plank-main.webp": {
+    "localPath": "assets/exercises/repdb/side-plank-main.webp",
+    "checksum": "sha256:19f057e2af04d0e5205ba919d6797bc2e722a2b26d4f2afa4e305a2577ac3ac7"
+  },
+  "images/flat/sit-ups-peak.webp": {
+    "localPath": "assets/exercises/repdb/sit-ups-peak.webp",
+    "checksum": "sha256:1b2b3238d4292e022c35c55962e2c6ff5e40fdbe7a56a840878de189d7cbd69d"
+  },
+  "images/flat/sit-ups-start.webp": {
+    "localPath": "assets/exercises/repdb/sit-ups-start.webp",
+    "checksum": "sha256:a1265f7a25ca294232022ff2fb0b45ead9b0bde083599e39606e8499e5c25116"
+  },
+  "images/flat/superman-peak.webp": {
+    "localPath": "assets/exercises/repdb/superman-peak.webp",
+    "checksum": "sha256:b2b897657416eafdc34919e705cb683694defb8427d57ff8fa86e26a31e2ae89"
+  },
+  "images/flat/superman-start.webp": {
+    "localPath": "assets/exercises/repdb/superman-start.webp",
+    "checksum": "sha256:adb87d3f4a48b381e1fdc65d8bea1ea56d93bb3a386dac45f25e558693f15d53"
+  }
+}

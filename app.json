@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Adaptive Core",
+    "slug": "adaptive-core",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": [
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": ["en", "tr"],
+            "android": ["en", "tr"]
+          }
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    }
+  }
+}
