@@ -9,7 +9,14 @@ export type SessionOutcome =
 
 export type ExerciseOverrideOutcome = "incomplete" | "pain";
 
+export type WorkoutDurationMinutes = 5 | 10 | 15;
+
+export type PatternSelectionExplanationCode =
+  | "DURATION_USER_SELECTION"
+  | "VARIATION_PATTERN_BALANCE";
+
 export type ExplanationCode =
+  | PatternSelectionExplanationCode
   | "LOAD_HOLD_EASY_STREAK"
   | "LOAD_UP_EASY_SUCCESS"
   | "LOAD_HOLD_APPROPRIATE"
@@ -79,4 +86,11 @@ export type PatternRecoveryResult = {
   patternState: PatternState;
   directive: RecoveryDirective;
   explanationCode: "RECOVERY_RECENT_FATIGUE" | null;
+};
+
+export type PatternSelectionResult = {
+  patterns: MovementPattern[];
+  requestedTargetCount: number;
+  shortened: boolean;
+  explanationCodes: PatternSelectionExplanationCode[];
 };

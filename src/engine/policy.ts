@@ -1,3 +1,21 @@
+import type { MovementPattern } from "../catalog/types";
+import type { WorkoutDurationMinutes } from "./types";
+
+export const MOVEMENT_PATTERNS = [
+  "trunk_flexion",
+  "anti_extension",
+  "anti_rotation",
+  "rotation",
+  "lateral_stability",
+  "hip_control",
+] as const satisfies readonly MovementPattern[];
+
+export const PATTERN_TARGET_COUNT_BY_DURATION = {
+  5: 3,
+  10: 4,
+  15: 6,
+} as const satisfies Record<WorkoutDurationMinutes, number>;
+
 export const FEEDBACK_POLICY = {
   requiredConsecutiveEasyForProgression: 2,
   maxPrimaryChangesPerExposure: 1,
