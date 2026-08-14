@@ -137,6 +137,7 @@ Randomness breaks ties only with stored reproducible seed.
 
 ```typescript
 type ExplanationCode =
+  | "LOAD_HOLD_EASY_STREAK"
   | "LOAD_UP_EASY_SUCCESS"
   | "LOAD_HOLD_APPROPRIATE"
   | "LOAD_HOLD_HARD"
@@ -149,6 +150,9 @@ type ExplanationCode =
   | "DURATION_USER_SELECTION"
   | "RETURN_AFTER_BREAK";
 ```
+
+- `LOAD_HOLD_EASY_STREAK`: first consecutive easy result, or a later easy result when no reviewed load/complexity progression is available.
+- `LOAD_UP_EASY_SUCCESS`: emitted only when load increases by one step or one reviewed progression edge is traversed.
 
 ## Generator Pseudocode
 

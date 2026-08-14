@@ -12,6 +12,7 @@ type MovementPattern = "trunk_flexion" | "anti_extension" | "anti_rotation" | "r
 type SessionOutcome = "easy" | "appropriate" | "hard" | "incomplete" | "pain";
 
 type ExplanationCode =
+  | "LOAD_HOLD_EASY_STREAK"
   | "LOAD_UP_EASY_SUCCESS"
   | "LOAD_HOLD_APPROPRIATE"
   | "LOAD_HOLD_HARD"
