@@ -169,4 +169,88 @@ describe("selectPatternTargets", () => {
       explanationCodes: ["DURATION_USER_SELECTION"],
     });
   });
+
+  it("prefers less-exposed patterns before seeded variation", () => {
+    const result = selectPatternTargets({
+      eligibleEntries: allPatternEntries.slice(0, 4),
+      durationMinutes: 5,
+      recentExposureCounts: {
+        trunk_flexion: 8,
+        anti_extension: 0,
+        anti_rotation: 1,
+        rotation: 2,
+      },
+      seed: "balance-seed",
+    });
+
+    expect(result.patterns).toEqual([
+      "anti_extension",
+      "anti_rotation",
+      "rotation",
+    ]);
+    expect(result.explanationCodes).toEqual([
+      "DURATION_USER_SELECTION",
+      "VARIATION_PATTERN_BALANCE",
+    ]);
+  });
+
+  it("does not claim pattern balance when equal exposure leaves the choice to seed", () => {
+    const result = selectPatternTargets({
+      eligibleEntries: allPatternEntries,
+      durationMinutes: 5,
+      recentExposureCounts: {},
+      seed: "seed-a",
+    });
+
+    expect(result.explanationCodes).toEqual([
+      "DURATION_USER_SELECTION",
+    ]);
+  });
+
+  it("returns the same targets for the same input and seed", () => {
+    const input = {
+      eligibleEntries: allPatternEntries,
+      durationMinutes: 5 as const,
+      recentExposureCounts: {},
+      seed: "seed-a",
+    };
+
+    expect(selectPatternTargets(input)).toEqual(
+      selectPatternTargets(input),
+    );
+  });
+
+  it("does not depend on eligible catalog array order", () => {
+    const forward = selectPatternTargets({
+      eligibleEntries: allPatternEntries,
+      durationMinutes: 5,
+      recentExposureCounts: {},
+      seed: "seed-a",
+    });
+    const reversed = selectPatternTargets({
+      eligibleEntries: [...allPatternEntries].reverse(),
+      durationMinutes: 5,
+      recentExposureCounts: {},
+      seed: "seed-a",
+    });
+
+    expect(reversed).toEqual(forward);
+  });
+
+  it("allows different seeds to vary equal-exposure choices", () => {
+    const seedA = selectPatternTargets({
+      eligibleEntries: allPatternEntries,
+      durationMinutes: 5,
+      recentExposureCounts: {},
+      seed: "seed-a",
+    });
+    const seedB = selectPatternTargets({
+      eligibleEntries: allPatternEntries,
+      durationMinutes: 5,
+      recentExposureCounts: {},
+      seed: "seed-b",
+    });
+
+    expect(seedA.patterns).not.toEqual(seedB.patterns);
+  });
 });
