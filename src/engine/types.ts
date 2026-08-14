@@ -16,7 +16,10 @@ export type ExplanationCode =
   | "LOAD_HOLD_HARD"
   | "LOAD_DOWN_INCOMPLETE"
   | "REGRESSION_INCOMPLETE"
-  | "EXERCISE_EXCLUDED_PAIN";
+  | "EXERCISE_EXCLUDED_PAIN"
+  | "RECOVERY_RECENT_FATIGUE";
+
+export type RecoveryDirective = "standard" | "lighter_only";
 
 export type FeedbackAction =
   | "hold"
@@ -70,4 +73,10 @@ export type FeedbackResult = {
   nextRestSeconds: number;
   action: FeedbackAction;
   explanationCode: ExplanationCode;
+};
+
+export type PatternRecoveryResult = {
+  patternState: PatternState;
+  directive: RecoveryDirective;
+  explanationCode: "RECOVERY_RECENT_FATIGUE" | null;
 };
