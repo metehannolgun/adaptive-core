@@ -58,4 +58,111 @@ describe("reduceFeedback", () => {
         explanationCode: "LOAD_HOLD_APPROPRIATE",
       });
   });
+
+  it("holds load and adds capped rest after hard feedback", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "hard",
+          currentRestSeconds: 50,
+          maxRestSeconds: 60,
+          patternState: {
+            pattern: "anti_extension",
+            capacity: 2,
+            fatigue: 9,
+            lastTrainedAt: null,
+            recentHardCount: 1,
+          },
+        }),
+      ),
+    ).toEqual({
+      exerciseState: {
+        exerciseId: "dead-bug",
+        currentLoad: 10,
+        currentSets: 2,
+        consecutiveEasy: 0,
+        lastOutcome: "hard",
+        excludedUntil: null,
+      },
+      patternState: {
+        pattern: "anti_extension",
+        capacity: 2,
+        fatigue: 10,
+        lastTrainedAt: null,
+        recentHardCount: 2,
+      },
+      nextRestSeconds: 60,
+      action: "increase_rest",
+      explanationCode: "LOAD_HOLD_HARD",
+    });
+  });
+
+  it("reduces one load step when completion is at least 75 percent", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "easy",
+          exerciseOutcome: "incomplete",
+          performedLoad: 8,
+        }),
+      ),
+    ).toMatchObject({
+      exerciseState: {
+        exerciseId: "dead-bug",
+        currentLoad: 5,
+        currentSets: 2,
+        consecutiveEasy: 0,
+        lastOutcome: "incomplete",
+        excludedUntil: null,
+      },
+      nextRestSeconds: 30,
+      action: "decrease_load",
+      explanationCode: "LOAD_DOWN_INCOMPLETE",
+    });
+  });
+
+  it("treats exactly 75 percent completion as a one-step reduction", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "incomplete",
+          performedLoad: 7.5,
+        }),
+      ),
+    ).toMatchObject({
+      exerciseState: {
+        currentLoad: 5,
+        lastOutcome: "incomplete",
+      },
+      action: "decrease_load",
+      explanationCode: "LOAD_DOWN_INCOMPLETE",
+    });
+  });
+
+  it("uses the reviewed regression below 75 percent completion", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "incomplete",
+          performedLoad: 7,
+          regression: {
+            exerciseId: "dead-bug-heel-tap",
+            minLoad: 4,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      exerciseState: {
+        exerciseId: "dead-bug-heel-tap",
+        currentLoad: 4,
+        currentSets: 2,
+        consecutiveEasy: 0,
+        lastOutcome: "incomplete",
+        excludedUntil: null,
+      },
+      nextRestSeconds: 30,
+      action: "regress",
+      explanationCode: "REGRESSION_INCOMPLETE",
+    });
+  });
 });

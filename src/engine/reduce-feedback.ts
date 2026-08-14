@@ -9,6 +9,65 @@ import type {
 export function reduceFeedback(input: FeedbackInput): FeedbackResult {
   const outcome = resolveEffectiveOutcome(input);
 
+  if (outcome === "incomplete") {
+    const completionRatio =
+      input.performedLoad / input.exerciseState.currentLoad;
+    const shouldRegress =
+      completionRatio < FEEDBACK_POLICY.incompleteRegressionThreshold &&
+      input.regression !== null;
+
+    const nextExerciseId = shouldRegress
+      ? input.regression!.exerciseId
+      : input.exerciseState.exerciseId;
+    const nextLoad = shouldRegress
+      ? input.regression!.minLoad
+      : Math.max(
+          input.minLoad,
+          input.exerciseState.currentLoad -
+            input.loadStep *
+              (completionRatio <
+              FEEDBACK_POLICY.incompleteRegressionThreshold
+                ? 2
+                : 1),
+        );
+
+    return {
+      exerciseState: {
+        ...input.exerciseState,
+        exerciseId: nextExerciseId,
+        currentLoad: nextLoad,
+        consecutiveEasy: 0,
+        lastOutcome: "incomplete",
+      },
+      patternState: updatePattern(input.patternState, -0.5, 3),
+      nextRestSeconds: input.currentRestSeconds,
+      action: shouldRegress ? "regress" : "decrease_load",
+      explanationCode: shouldRegress
+        ? "REGRESSION_INCOMPLETE"
+        : "LOAD_DOWN_INCOMPLETE",
+    };
+  }
+
+  if (outcome === "hard") {
+    return {
+      exerciseState: {
+        ...input.exerciseState,
+        consecutiveEasy: 0,
+        lastOutcome: "hard",
+      },
+      patternState: {
+        ...updatePattern(input.patternState, 0, 3),
+        recentHardCount: input.patternState.recentHardCount + 1,
+      },
+      nextRestSeconds: Math.min(
+        input.maxRestSeconds,
+        input.currentRestSeconds + FEEDBACK_POLICY.hardRestStepSeconds,
+      ),
+      action: "increase_rest",
+      explanationCode: "LOAD_HOLD_HARD",
+    };
+  }
+
   if (outcome === "appropriate") {
     return {
       exerciseState: {
