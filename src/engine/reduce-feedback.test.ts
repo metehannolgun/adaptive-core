@@ -165,4 +165,107 @@ describe("reduceFeedback", () => {
       explanationCode: "REGRESSION_INCOMPLETE",
     });
   });
+
+  it("excludes pain immediately without changing pattern capacity", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "easy",
+          exerciseOutcome: "pain",
+        }),
+      ),
+    ).toEqual({
+      exerciseState: {
+        exerciseId: "dead-bug",
+        currentLoad: 10,
+        currentSets: 2,
+        consecutiveEasy: 0,
+        lastOutcome: "pain",
+        excludedUntil: null,
+      },
+      patternState: {
+        pattern: "anti_extension",
+        capacity: 2,
+        fatigue: 2,
+        lastTrainedAt: "2026-08-14T09:00:00.000Z",
+        recentHardCount: 0,
+      },
+      nextRestSeconds: 30,
+      action: "exclude",
+      explanationCode: "EXERCISE_EXCLUDED_PAIN",
+    });
+  });
+
+  it("holds load after the first consecutive easy result", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "easy",
+          exerciseState: {
+            exerciseId: "dead-bug",
+            currentLoad: 10,
+            currentSets: 2,
+            consecutiveEasy: 0,
+            lastOutcome: null,
+            excludedUntil: null,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      exerciseState: {
+        currentLoad: 10,
+        consecutiveEasy: 1,
+        lastOutcome: "easy",
+      },
+      nextRestSeconds: 30,
+      action: "hold",
+      explanationCode: "LOAD_HOLD_EASY_STREAK",
+    });
+  });
+
+  it("increases only one load step after the second consecutive easy result", () => {
+    expect(reduceFeedback(createInput({ sessionOutcome: "easy" })))
+      .toMatchObject({
+        exerciseState: {
+          exerciseId: "dead-bug",
+          currentLoad: 15,
+          currentSets: 2,
+          consecutiveEasy: 0,
+          lastOutcome: "easy",
+        },
+        nextRestSeconds: 30,
+        action: "increase_load",
+        explanationCode: "LOAD_UP_EASY_SUCCESS",
+      });
+  });
+
+  it("uses one reviewed progression when load is already at maximum", () => {
+    expect(
+      reduceFeedback(
+        createInput({
+          sessionOutcome: "easy",
+          exerciseState: {
+            exerciseId: "dead-bug",
+            currentLoad: 20,
+            currentSets: 2,
+            consecutiveEasy: 1,
+            lastOutcome: "easy",
+            excludedUntil: null,
+          },
+          progression: {
+            exerciseId: "dead-bug-longer-lever",
+            minLoad: 6,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      exerciseState: {
+        exerciseId: "dead-bug-longer-lever",
+        currentLoad: 6,
+        consecutiveEasy: 0,
+      },
+      action: "progress",
+      explanationCode: "LOAD_UP_EASY_SUCCESS",
+    });
+  });
 });

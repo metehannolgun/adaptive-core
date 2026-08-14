@@ -9,6 +9,73 @@ import type {
 export function reduceFeedback(input: FeedbackInput): FeedbackResult {
   const outcome = resolveEffectiveOutcome(input);
 
+  if (outcome === "pain") {
+    return {
+      exerciseState: {
+        ...input.exerciseState,
+        consecutiveEasy: 0,
+        lastOutcome: "pain",
+        excludedUntil: null,
+      },
+      patternState: input.patternState,
+      nextRestSeconds: input.currentRestSeconds,
+      action: "exclude",
+      explanationCode: "EXERCISE_EXCLUDED_PAIN",
+    };
+  }
+
+  if (outcome === "easy") {
+    const easyCount = input.exerciseState.consecutiveEasy + 1;
+    const canProgress =
+      easyCount >=
+      FEEDBACK_POLICY.requiredConsecutiveEasyForProgression;
+    const canIncreaseLoad =
+      input.exerciseState.currentLoad + input.loadStep <= input.maxLoad;
+
+    if (canProgress && canIncreaseLoad) {
+      return {
+        exerciseState: {
+          ...input.exerciseState,
+          currentLoad: input.exerciseState.currentLoad + input.loadStep,
+          consecutiveEasy: 0,
+          lastOutcome: "easy",
+        },
+        patternState: updatePattern(input.patternState, 1, 1),
+        nextRestSeconds: input.currentRestSeconds,
+        action: "increase_load",
+        explanationCode: "LOAD_UP_EASY_SUCCESS",
+      };
+    }
+
+    if (canProgress && input.progression !== null) {
+      return {
+        exerciseState: {
+          ...input.exerciseState,
+          exerciseId: input.progression.exerciseId,
+          currentLoad: input.progression.minLoad,
+          consecutiveEasy: 0,
+          lastOutcome: "easy",
+        },
+        patternState: updatePattern(input.patternState, 1, 1),
+        nextRestSeconds: input.currentRestSeconds,
+        action: "progress",
+        explanationCode: "LOAD_UP_EASY_SUCCESS",
+      };
+    }
+
+    return {
+      exerciseState: {
+        ...input.exerciseState,
+        consecutiveEasy: easyCount,
+        lastOutcome: "easy",
+      },
+      patternState: updatePattern(input.patternState, 1, 1),
+      nextRestSeconds: input.currentRestSeconds,
+      action: "hold",
+      explanationCode: "LOAD_HOLD_EASY_STREAK",
+    };
+  }
+
   if (outcome === "incomplete") {
     const completionRatio =
       input.performedLoad / input.exerciseState.currentLoad;
