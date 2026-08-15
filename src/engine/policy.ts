@@ -16,6 +16,11 @@ export const PATTERN_TARGET_COUNT_BY_DURATION = {
   15: 6,
 } as const satisfies Record<WorkoutDurationMinutes, number>;
 
+export const TIME_BUDGET_POLICY = {
+  transitionSeconds: 10,
+  minimumFillRatio: 0.8,
+} as const;
+
 export const FEEDBACK_POLICY = {
   requiredConsecutiveEasyForProgression: 2,
   maxPrimaryChangesPerExposure: 1,

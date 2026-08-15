@@ -110,7 +110,11 @@ Exercise work is estimated from `prescribed load × estimatedSecondsPerUnit × s
 For `seconds` load mode, `estimatedSecondsPerUnit` is `1`; rep-based modes use
 the reviewed exercise-specific catalog value.
 
-Fill within tolerance below budget. Never exceed to hit movement quota.
+Use 10 seconds between exercises. A valid composition fills at least 80% of
+the selected duration and never exceeds it. If an ordered composition exceeds
+the budget, remove trailing exercises until it fits. Never add load or sets to
+fill time. If the remaining composition is below 80%, return
+`INSUFFICIENT_DURATION_COVERAGE` instead of presenting it as a valid workout.
 
 ### Ordering
 - Greater coordination first (user is fresh)
