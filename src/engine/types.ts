@@ -15,8 +15,12 @@ export type PatternSelectionExplanationCode =
   | "DURATION_USER_SELECTION"
   | "VARIATION_PATTERN_BALANCE";
 
+export type ExerciseSelectionExplanationCode =
+  "VARIATION_RECENT_EXPOSURE";
+
 export type ExplanationCode =
   | PatternSelectionExplanationCode
+  | ExerciseSelectionExplanationCode
   | "LOAD_HOLD_EASY_STREAK"
   | "LOAD_UP_EASY_SUCCESS"
   | "LOAD_HOLD_APPROPRIATE"

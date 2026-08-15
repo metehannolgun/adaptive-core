@@ -7,6 +7,7 @@ import type {
   PatternSelectionResult,
   WorkoutDurationMinutes,
 } from "./types";
+import { stableSeedRank } from "./stable-seed-rank";
 
 export type SelectPatternTargetsInput = {
   eligibleEntries: readonly CatalogEntry[];
@@ -16,20 +17,6 @@ export type SelectPatternTargetsInput = {
   >;
   seed: string;
 };
-
-function stableSeedRank(
-  seed: string,
-  pattern: MovementPattern,
-): number {
-  let hash = 2_166_136_261;
-
-  for (const character of `${seed}:${pattern}`) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16_777_619);
-  }
-
-  return hash >>> 0;
-}
 
 function getExposureCount(
   pattern: MovementPattern,
