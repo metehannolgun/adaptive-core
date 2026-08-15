@@ -48,6 +48,7 @@ export type Exercise = {
   defaultLoad: number;
   maxLoad: number;
   loadStep: number;
+  estimatedSecondsPerUnit: number;
   defaultSets: number;
   minRestSeconds: number;
   maxRestSeconds: number;
@@ -188,6 +189,7 @@ export type CatalogValidationCode =
   | "MISSING_EXERCISE_MEDIA"
   | "INVALID_LOAD_RANGE"
   | "INVALID_LOAD_STEP"
+  | "INVALID_ESTIMATED_SECONDS_PER_UNIT"
   | "INVALID_DEFAULT_SETS"
   | "INVALID_REST_RANGE"
   | "INVALID_SETUP_SECONDS"

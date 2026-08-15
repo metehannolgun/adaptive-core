@@ -49,6 +49,7 @@ function createEntry(
       defaultLoad: 20,
       maxLoad: 40,
       loadStep: 5,
+      estimatedSecondsPerUnit: 1,
       defaultSets: 2,
       minRestSeconds: 30,
       maxRestSeconds: 60,

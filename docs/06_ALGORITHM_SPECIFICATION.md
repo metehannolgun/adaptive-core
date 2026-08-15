@@ -105,6 +105,11 @@ Each workout uses a duration-appropriate subset. Across sessions, avoid persiste
 ```
 exercise work + inter-set rest + transitions + instruction allowance = estimated duration
 ```
+
+Exercise work is estimated from `prescribed load × estimatedSecondsPerUnit × sets`.
+For `seconds` load mode, `estimatedSecondsPerUnit` is `1`; rep-based modes use
+the reviewed exercise-specific catalog value.
+
 Fill within tolerance below budget. Never exceed to hit movement quota.
 
 ### Ordering

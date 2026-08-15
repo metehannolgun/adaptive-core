@@ -18,6 +18,7 @@ const validExercise: Exercise = {
   defaultLoad: 6,
   maxLoad: 12,
   loadStep: 2,
+  estimatedSecondsPerUnit: 4,
   defaultSets: 2,
   minRestSeconds: 15,
   maxRestSeconds: 45,
@@ -102,6 +103,20 @@ describe("validateExercise", () => {
       }),
     ).toEqual(["INVALID_REST_RANGE"]);
   });
+
+  it.each([0, -1, Number.NaN])(
+    "rejects invalid estimated seconds per unit: %p",
+    (estimatedSecondsPerUnit) => {
+      const exerciseWithTiming: Exercise = {
+        ...validExercise,
+        estimatedSecondsPerUnit,
+      };
+
+      expect(validateExercise(exerciseWithTiming)).toEqual([
+        "INVALID_ESTIMATED_SECONDS_PER_UNIT",
+      ]);
+    },
+  );
 
   it("requires internal review before activation", () => {
     expect(
