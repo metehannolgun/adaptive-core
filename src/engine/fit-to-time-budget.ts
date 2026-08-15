@@ -37,7 +37,7 @@ function estimatePrescriptionSeconds(
   );
 }
 
-function estimateWorkoutSeconds(
+export function estimateWorkoutDurationSeconds(
   prescriptions: readonly ExercisePrescription[],
 ): number {
   const exerciseSeconds = prescriptions.reduce(
@@ -63,13 +63,13 @@ export function fitToTimeBudget(
 
   while (
     prescriptions.length > 0 &&
-    estimateWorkoutSeconds(prescriptions) > budgetSeconds
+    estimateWorkoutDurationSeconds(prescriptions) > budgetSeconds
   ) {
     prescriptions.pop();
   }
 
   const estimatedDurationSeconds =
-    estimateWorkoutSeconds(prescriptions);
+    estimateWorkoutDurationSeconds(prescriptions);
   const fits = estimatedDurationSeconds >= minimumDurationSeconds;
 
   return {

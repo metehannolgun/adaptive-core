@@ -174,10 +174,17 @@ function generateNextWorkout(input: GeneratorInput): WorkoutPrescription {
   const loaded = prescribeConservativeLoads(selected, recovered, input.policy);
   const ordered = orderExercises(loaded, input.policy);
   const fitted = fitToTimeBudget(ordered, input.durationMinutes, input.policy);
-  assertSafetyInvariants(fitted, input.constraints);
+  const safetyViolations = validateWorkoutSafety(fitted, input.constraints);
+  if (safetyViolations.length > 0) {
+    return buildSafeGenerationFailure(safetyViolations);
+  }
   return attachVersionsAndExplanations(fitted, input);
 }
 ```
+
+Safety validation returns typed violation codes instead of throwing. A result
+with any violation must not be published as a workout; orchestration returns a
+safe generation failure so the UI can choose an explicit fallback.
 
 ## Mandatory Test Scenarios
 
