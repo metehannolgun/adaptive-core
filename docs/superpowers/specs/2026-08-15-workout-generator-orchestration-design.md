@@ -133,6 +133,11 @@ success only when duration and every safety invariant pass.
 
 ```typescript
 type WorkoutGenerationFailure =
+  | {
+      kind: "failure";
+      reason: "INVALID_CATALOG";
+      issues: CatalogValidationCode[];
+    }
   | { kind: "failure"; reason: "NO_ELIGIBLE_EXERCISES" }
   | {
       kind: "failure";
@@ -153,24 +158,26 @@ localized fallback without risking accidental publication of unsafe items.
 
 `generateNextWorkout` runs these stages in order:
 
-1. Assess recovery for all six movement patterns using `now`, pattern state,
+1. Validate the complete catalog snapshot and return `INVALID_CATALOG` with
+   stable issue codes when release invariants fail.
+2. Assess recovery for all six movement patterns using `now`, pattern state,
    and recent outcomes.
-2. Build `EligibilityConstraints` from caller constraints plus the derived
+3. Build `EligibilityConstraints` from caller constraints plus the derived
    recovery directives.
-3. Filter catalog entries through `filterEligibleExercises`.
-4. Return `NO_ELIGIBLE_EXERCISES` if the filtered set is empty.
-5. Choose duration-appropriate pattern targets.
-6. Select one safe exercise for each available target pattern.
-7. Prescribe conservative load, sets, and rest.
-8. Order exercises by coordination demand while avoiding adjacent repeated
+4. Filter catalog entries through `filterEligibleExercises`.
+5. Return `NO_ELIGIBLE_EXERCISES` if the filtered set is empty.
+6. Choose duration-appropriate pattern targets.
+7. Select one safe exercise for each available target pattern.
+8. Prescribe conservative load, sets, and rest.
+9. Order exercises by coordination demand while avoiding adjacent repeated
    patterns when possible.
-9. Fit the ordered prescription to the selected duration.
-10. Return `INSUFFICIENT_DURATION_COVERAGE` when the fitted result is invalid.
-11. Validate the final result with `validateWorkoutSafety`.
-12. Return `SAFETY_VIOLATION` with typed violations if the safety list is not
+10. Fit the ordered prescription to the selected duration.
+11. Return `INSUFFICIENT_DURATION_COVERAGE` when the fitted result is invalid.
+12. Validate the final result with `validateWorkoutSafety`.
+13. Return `SAFETY_VIOLATION` with typed violations if the safety list is not
     empty.
-13. Deduplicate explanation codes and attach version metadata.
-14. Return the immutable success result.
+14. Deduplicate explanation codes and attach version metadata.
+15. Return the immutable success result.
 
 No stage mutates caller-owned arrays, records, catalog entries, or state.
 
@@ -194,9 +201,10 @@ preview was requested.
 
 Failures use pipeline order:
 
-1. `NO_ELIGIBLE_EXERCISES`
-2. `INSUFFICIENT_DURATION_COVERAGE`
-3. `SAFETY_VIOLATION`
+1. `INVALID_CATALOG`
+2. `NO_ELIGIBLE_EXERCISES`
+3. `INSUFFICIENT_DURATION_COVERAGE`
+4. `SAFETY_VIOLATION`
 
 The first reached failure is returned. Lower stages do not run after a
 failure. Safety constraints are never relaxed to convert a failure into a
@@ -222,6 +230,9 @@ Required scenarios:
 8. Reordering the original catalog array does not change the result for the
    same input and seed.
 9. Caller-owned input arrays and records remain unchanged.
+10. Duplicate catalog identities return stable `INVALID_CATALOG` issues before
+    eligibility is evaluated.
+11. Non-finite persisted fatigue fails toward recovery-safe selection.
 
 All existing engine tests, full Jest suite, TypeScript checking, and Expo
 Doctor remain required before completion.

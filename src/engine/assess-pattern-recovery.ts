@@ -16,11 +16,16 @@ export function assessPatternRecovery(
     patternState.lastTrainedAt,
     now,
   );
+  // Corrupted persisted fatigue must fail toward recovery; treating NaN as
+  // rested could allow a higher-fatigue exercise into the next workout.
+  const storedFatigue = Number.isFinite(patternState.fatigue)
+    ? patternState.fatigue
+    : FEEDBACK_POLICY.fatigueMax;
   const recoveredState = {
     ...patternState,
     fatigue: Math.max(
       0,
-      patternState.fatigue -
+      storedFatigue -
         elapsedDays * FEEDBACK_POLICY.fatigueDecayPer24Hours,
     ),
   };

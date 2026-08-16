@@ -166,25 +166,22 @@ type ExplanationCode =
 ## Generator Pseudocode
 
 ```typescript
-function generateNextWorkout(input: GeneratorInput): WorkoutPrescription {
-  const recovered = decayFatigueByElapsedTime(input.state, input.now);
-  const eligible = filterEligibleExercises(input.catalog, input.constraints, recovered);
-  const targets = choosePatternTargets(eligible, recovered, input.durationMinutes);
-  const selected = selectControlledVariation(eligible, targets, input.history, input.seed);
-  const loaded = prescribeConservativeLoads(selected, recovered, input.policy);
-  const ordered = orderExercises(loaded, input.policy);
-  const fitted = fitToTimeBudget(ordered, input.durationMinutes, input.policy);
-  const safetyViolations = validateWorkoutSafety(fitted, input.constraints);
-  if (safetyViolations.length > 0) {
-    return buildSafeGenerationFailure(safetyViolations);
-  }
-  return attachVersionsAndExplanations(fitted, input);
-}
+function generateNextWorkout(
+  input: GenerateNextWorkoutInput,
+): WorkoutGenerationResult;
 ```
 
+The pure orchestrator validates the complete catalog snapshot, assesses
+recovery, filters eligibility, selects pattern targets and exercises,
+prescribes conservative loads, orders the items, fits the duration, and
+validates final safety in that order. It returns the first typed failure
+reached: `INVALID_CATALOG`, `NO_ELIGIBLE_EXERCISES`,
+`INSUFFICIENT_DURATION_COVERAGE`, or `SAFETY_VIOLATION`.
+
 Safety validation returns typed violation codes instead of throwing. A result
-with any violation must not be published as a workout; orchestration returns a
-safe generation failure so the UI can choose an explicit fallback.
+with any violation must not be published as a workout. Only a successful
+result contains the complete prescription, explanation codes, seed, and
+engine, policy, and catalog versions.
 
 ## Mandatory Test Scenarios
 
