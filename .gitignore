@@ -1,3 +1,4 @@
 node_modules/
 .expo/
+.worktrees/
 .DS_Store
