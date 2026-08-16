@@ -1,7 +1,7 @@
 # Workout Generator Orchestration Design
 
 **Date:** 2026-08-15
-**Status:** Awaiting written-spec review
+**Status:** Approved
 **Scope:** Pure TypeScript orchestration for the existing Adaptive Core workout-generation stages
 
 ## 1. Purpose
