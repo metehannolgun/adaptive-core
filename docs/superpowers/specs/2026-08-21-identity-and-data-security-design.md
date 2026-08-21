@@ -310,13 +310,17 @@ The product collects only:
 
 - Verified email in Supabase Auth.
 - Locale and workout preferences.
+- An optional coarse, predefined active movement-limitation area selected during
+  onboarding.
 - Prescriptions, completion outcomes, adaptation state, and exclusions needed
   to provide the product.
 - The approved analytics properties only after consent.
 
 It does not collect name, username, birth date, profile photo, contacts,
 location, camera, microphone, device fingerprint, free-form health text, pain
-location, or diagnosis.
+severity, symptoms, diagnosis, or a historical pain-body-area record. Pain
+during a known exercise excludes that exercise without asking for the body area
+again.
 
 PostHog remains consent-first with exactly the approved explicit events. It
 does not receive email, tokens, Supabase records, or detailed workout/health
@@ -331,6 +335,8 @@ content. Revoking consent stops future capture.
   requires a lawful extension.
 - Completed deletion reconciliation record: 30 days, containing only a keyed
   user-identity hash, completion timestamp, and step status.
+- Active movement-limitation area: until the user clears or replaces that
+  safety constraint, or deletes the account.
 - Local active workout: until completion, cancellation, or account deletion.
 - Deleted active data: removed immediately; encrypted backups age out under the
   documented provider backup lifecycle.
