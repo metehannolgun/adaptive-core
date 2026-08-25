@@ -6,7 +6,7 @@ function fail(operation, category) {
   throw new Error(`${operation}: ${category}`);
 }
 
-function errorCategory(error) {
+export function errorCategory(error) {
   if (typeof error === "object" && error !== null && "status" in error) {
     const status = error.status;
     if (typeof status === "number") {
@@ -17,6 +17,10 @@ function errorCategory(error) {
   return "auth";
 }
 
+export function safeOperationFailure(operation, error) {
+  return new Error(`${operation}: ${errorCategory(error)}`);
+}
+
 function assert(condition, operation) {
   if (!condition) {
     fail(operation, "unexpected_response");
@@ -24,11 +28,17 @@ function assert(condition, operation) {
 }
 
 function loadLocalSupabaseStatus() {
-  const result = spawnSync(
-    "./node_modules/.bin/supabase",
-    ["status", "--output", "json"],
-    { encoding: "utf8" },
-  );
+  let result;
+
+  try {
+    result = spawnSync(
+      "./node_modules/.bin/supabase",
+      ["status", "--output", "json"],
+      { encoding: "utf8" },
+    );
+  } catch {
+    fail("local_status", "cli");
+  }
 
   if (result.status !== 0) {
     fail("local_status", "cli");
@@ -53,21 +63,33 @@ function localAuthConfig(status) {
   return { supabaseUrl, publishableKey, serviceRoleKey };
 }
 
-function createLocalClient(supabaseUrl, key) {
-  return createClient(supabaseUrl, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
+function createLocalClient(supabaseUrl, key, operation) {
+  try {
+    return createClient(supabaseUrl, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+  } catch (error) {
+    throw safeOperationFailure(operation, error);
+  }
 }
 
 async function queryOwnRow(client, table, columns) {
-  const { data, error } = await client.from(table).select(columns);
+  let response;
+
+  try {
+    response = await client.from(table).select(columns);
+  } catch (error) {
+    throw safeOperationFailure(`${table}_select`, error);
+  }
+
+  const { data, error } = response;
 
   if (error !== null) {
-    fail(`${table}_select`, errorCategory(error));
+    throw safeOperationFailure(`${table}_select`, error);
   }
 
   assert(Array.isArray(data) && data.length === 1, `${table}_select`);
@@ -79,16 +101,32 @@ async function deleteFixtureUser(adminClient, userId) {
     return;
   }
 
-  const { error } = await adminClient.auth.admin.deleteUser(userId);
+  let response;
+
+  try {
+    response = await adminClient.auth.admin.deleteUser(userId);
+  } catch (error) {
+    throw safeOperationFailure("anonymous_cleanup", error);
+  }
+
+  const { error } = response;
   if (error !== null) {
-    fail("anonymous_cleanup", errorCategory(error));
+    throw safeOperationFailure("anonymous_cleanup", error);
   }
 }
 
 async function signOutLocal(client) {
-  const { error } = await client.auth.signOut({ scope: "local" });
+  let response;
+
+  try {
+    response = await client.auth.signOut({ scope: "local" });
+  } catch (error) {
+    throw safeOperationFailure("anonymous_sign_out", error);
+  }
+
+  const { error } = response;
   if (error !== null) {
-    fail("anonymous_sign_out", errorCategory(error));
+    throw safeOperationFailure("anonymous_sign_out", error);
   }
 }
 
@@ -125,15 +163,31 @@ async function main() {
   const { supabaseUrl, publishableKey, serviceRoleKey } = localAuthConfig(
     loadLocalSupabaseStatus(),
   );
-  const anonymousClient = createLocalClient(supabaseUrl, publishableKey);
-  const adminClient = createLocalClient(supabaseUrl, serviceRoleKey);
+  const anonymousClient = createLocalClient(
+    supabaseUrl,
+    publishableKey,
+    "anonymous_client",
+  );
+  const adminClient = createLocalClient(
+    supabaseUrl,
+    serviceRoleKey,
+    "admin_client",
+  );
   let userId;
   let primaryError;
 
   try {
-    const { data, error } = await anonymousClient.auth.signInAnonymously();
+    let response;
+
+    try {
+      response = await anonymousClient.auth.signInAnonymously();
+    } catch (error) {
+      throw safeOperationFailure("anonymous_sign_in", error);
+    }
+
+    const { data, error } = response;
     if (error !== null) {
-      fail("anonymous_sign_in", errorCategory(error));
+      throw safeOperationFailure("anonymous_sign_in", error);
     }
 
     const user = data.user;
@@ -144,7 +198,7 @@ async function main() {
     const profile = await queryOwnRow(
       anonymousClient,
       "profiles",
-      "user_id, locale, created_at, updated_at",
+      "*",
     );
     const trainingPreferences = await queryOwnRow(
       anonymousClient,
@@ -177,9 +231,9 @@ async function main() {
   console.log("Local anonymous identity integration test passed.");
 }
 
-main().catch((error) => {
-  console.error(
-    error instanceof Error ? error.message : "anonymous_identity_test: unknown",
-  );
-  process.exitCode = 1;
-});
+if (process.argv[1]?.endsWith("auth-anonymous-bootstrap.test.mjs")) {
+  main().catch(() => {
+    console.error("anonymous_identity_test: auth");
+    process.exitCode = 1;
+  });
+}
