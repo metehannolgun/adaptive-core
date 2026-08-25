@@ -194,6 +194,47 @@ describe("createIdentityService", () => {
     },
   );
 
+  it.each([
+    {
+      identity: { userId: "guest-listener-race", isAnonymous: true },
+      expected: { status: "guest", userId: "guest-listener-race" },
+    },
+    {
+      identity: { userId: "member-listener-race", isAnonymous: false },
+      expected: { status: "permanent", userId: "member-listener-race" },
+    },
+  ] as const)(
+    "waits when a restoring listener asks for a guest before %s is resolved",
+    async ({ identity, expected }) => {
+      const auth = createAuthPort();
+      const restoreResult = deferred<AuthPortResult>();
+      const anonymousResult = deferred<AuthPortResult>();
+      auth.getCurrentIdentity.mockReturnValue(restoreResult.promise);
+      auth.signInAnonymously.mockReturnValue(anonymousResult.promise);
+      const service = createIdentityService(auth);
+      let guestRequest!: Promise<IdentityState>;
+
+      service.subscribe((state) => {
+        if (state.status === "restoring") {
+          guestRequest = service.ensureGuestSession();
+        }
+      });
+
+      const restore = service.restore();
+      await Promise.resolve();
+
+      expect(auth.signInAnonymously).not.toHaveBeenCalled();
+
+      restoreResult.resolve({ ok: true, identity });
+
+      await expect(Promise.all([restore, guestRequest])).resolves.toEqual([
+        expected,
+        expected,
+      ]);
+      expect(auth.signInAnonymously).not.toHaveBeenCalled();
+    },
+  );
+
   it("contains a rejected identity lookup in a stable error state", async () => {
     const auth = createAuthPort();
     auth.getCurrentIdentity.mockRejectedValue(
@@ -243,6 +284,23 @@ describe("createIdentityService", () => {
       userId: "guest-after-rejection",
     });
     expect(auth.signInAnonymously).toHaveBeenCalledTimes(2);
+  });
+
+  it("contains a malformed anonymous sign-in return without throwing", async () => {
+    const auth = createAuthPort();
+    auth.signInAnonymously.mockImplementation(
+      () => undefined as unknown as Promise<AuthPortResult>,
+    );
+    const service = createIdentityService(auth);
+    let request!: Promise<IdentityState>;
+
+    expect(() => {
+      request = service.ensureGuestSession();
+    }).not.toThrow();
+    await expect(request).resolves.toEqual({
+      status: "error",
+      code: "AUTH_UNAVAILABLE",
+    });
   });
 
   it("maps a non-network anonymous Auth failure to a stable error", async () => {

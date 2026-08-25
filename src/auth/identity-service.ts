@@ -72,11 +72,12 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
       return restoreRequest;
     }
 
-    publish({ status: "restoring" });
-
     let request!: Promise<IdentityState>;
     request = Promise.resolve()
-      .then(() => auth.getCurrentIdentity())
+      .then(() => {
+        publish({ status: "restoring" });
+        return auth.getCurrentIdentity();
+      })
       .then((result) => {
         if (!result.ok && result.kind === "invalid_session") {
           return Promise.resolve()
@@ -121,15 +122,15 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
     }
 
     let request!: Promise<IdentityState>;
-    let signInRequest: Promise<AuthPortResult>;
+    let signInRequest: unknown;
     try {
       signInRequest = auth.signInAnonymously();
     } catch {
       signInRequest = Promise.reject();
     }
 
-    request = signInRequest
-      .then((result) => publish(resultToState(result)))
+    request = Promise.resolve(signInRequest)
+      .then((result) => publish(resultToState(result as AuthPortResult)))
       .catch(unavailable)
       .finally(() => {
         if (guestRequest === request) {
