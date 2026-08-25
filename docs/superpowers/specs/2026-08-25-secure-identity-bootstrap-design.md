@@ -69,6 +69,7 @@ The application observes a small provider-neutral state:
 ```ts
 type IdentityState =
   | { status: "restoring" }
+  | { status: "no_session" }
   | { status: "guest"; userId: string }
   | { status: "permanent"; userId: string }
   | { status: "offline" }
@@ -92,8 +93,8 @@ type IdentityService = {
 
 1. The native splash remains visible while `restore()` checks SecureStore and Supabase Auth state.
 2. A valid stored guest or permanent session becomes the current identity.
-3. An invalid or corrupt stored session is cleared through the Supabase client and reported as unavailable; raw session material is never logged.
-4. When no session exists, the navigation tree renders onboarding immediately.
+3. An invalid or corrupt stored session is cleared through the Supabase client and becomes `no_session`; raw session material is never logged.
+4. When no session exists, `restore()` returns `no_session` and the navigation tree renders onboarding immediately.
 5. `ensureGuestSession()` starts in the background.
 6. A successful anonymous sign-in publishes `guest` with its UUID.
 7. A network failure publishes `offline` and remains retryable; it does not block onboarding.
