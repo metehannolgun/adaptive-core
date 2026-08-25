@@ -21,6 +21,7 @@
 - Keep one Supabase client and no Supabase imports under `src/engine/` or UI feature folders.
 - Use `(select auth.uid())` ownership policies already committed; this plan does not edit existing migrations.
 - Anonymous sign-in abuse protection, hosted CAPTCHA/Turnstile configuration, and 90-day inactive guest cleanup are production release gates, not hidden inside this local client slice.
+- The current Expo SDK 54 dependency tree has a known npm-audit baseline of 16 transitive production findings (7 moderate, 9 high, 0 critical); this slice must introduce no new critical finding and no new high finding attributable to the added Auth dependencies. Never run `npm audit fix --force`, because the current suggested fix is a breaking Expo 57 upgrade.
 - Every task follows RED → GREEN, ends with focused tests, and leaves all existing tests green.
 
 ---
@@ -228,10 +229,11 @@ Run:
 npm test -- public-env
 npx expo config --type public
 npx expo install --check
+npm audit --omit=dev
 git diff --check
 ```
 
-Expected: test PASS; Expo config resolves; dependencies are compatible; diff check is silent. Inspect the public config output and confirm it contains no service-role credential.
+Expected: test PASS; Expo config resolves; dependencies are compatible; diff check is silent. The audit may retain the documented Expo/Metro baseline but adds no Auth-package high/critical finding. Inspect the public config output and confirm it contains no service-role credential.
 
 - [ ] **Step 7: Commit Task 1**
 
@@ -877,6 +879,7 @@ npm run db:lint
 npm test
 npm run typecheck
 npx expo-doctor
+npm audit --omit=dev
 git diff --check codex/catalog-seed-v1..HEAD
 git status --short --branch
 ```
@@ -890,6 +893,7 @@ Expected:
 - all Jest suites pass;
 - strict TypeScript passes;
 - Expo Doctor passes every check;
+- npm audit adds no critical finding and no new high finding attributable to the Auth dependencies; the documented Expo SDK 54 baseline is reported, not force-fixed;
 - diff check is silent;
 - status shows only the intentional protected root untracked files, not generated secrets or Supabase runtime state.
 
@@ -919,3 +923,4 @@ This local/mobile foundation is not production Auth rollout approval. Before a h
 3. Keep anonymous sign-in rate limits bounded and alert on abnormal creation volume.
 4. Schedule deletion of inactive, unlinked anonymous users and their records at 90 days as required by the parent security design.
 5. Verify production SMTP, OTP template, redirect allowlist, TLS/network restrictions, backups, Security Advisor, store privacy declarations, and the applicable MASVS/ASVS evidence.
+6. Re-evaluate the documented Expo SDK 54 npm advisories during the deliberate Expo SDK upgrade plan; do not use a forced major upgrade inside an Auth feature branch.
