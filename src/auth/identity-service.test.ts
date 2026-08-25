@@ -15,6 +15,15 @@ function createAuthPort(): jest.Mocked<IdentityAuthPort> {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+
+  return { promise, resolve };
+}
+
 describe("createIdentityService", () => {
   const restoreCases: Array<[string, AuthPortResult, IdentityState]> = [
     [
@@ -149,6 +158,91 @@ describe("createIdentityService", () => {
       { status: "guest", userId: "guest-once" },
       { status: "guest", userId: "guest-once" },
     ]);
+  });
+
+  it.each([
+    {
+      identity: { userId: "guest-restored", isAnonymous: true },
+      expected: { status: "guest", userId: "guest-restored" },
+    },
+    {
+      identity: { userId: "member-restored", isAnonymous: false },
+      expected: { status: "permanent", userId: "member-restored" },
+    },
+  ] as const)(
+    "waits for an in-flight restore before deciding whether %s needs a guest",
+    async ({ identity, expected }) => {
+      const auth = createAuthPort();
+      const restoreResult = deferred<AuthPortResult>();
+      const anonymousResult = deferred<AuthPortResult>();
+      auth.getCurrentIdentity.mockReturnValue(restoreResult.promise);
+      auth.signInAnonymously.mockReturnValue(anonymousResult.promise);
+      const service = createIdentityService(auth);
+
+      const restore = service.restore();
+      const guest = service.ensureGuestSession();
+
+      expect(auth.signInAnonymously).not.toHaveBeenCalled();
+
+      restoreResult.resolve({ ok: true, identity });
+
+      await expect(Promise.all([restore, guest])).resolves.toEqual([
+        expected,
+        expected,
+      ]);
+      expect(auth.signInAnonymously).not.toHaveBeenCalled();
+    },
+  );
+
+  it("contains a rejected identity lookup in a stable error state", async () => {
+    const auth = createAuthPort();
+    auth.getCurrentIdentity.mockRejectedValue(
+      new Error("provider detail with access token"),
+    );
+    const service = createIdentityService(auth);
+
+    await expect(service.restore()).resolves.toEqual({
+      status: "error",
+      code: "AUTH_UNAVAILABLE",
+    });
+    expect(JSON.stringify(service.getState())).not.toContain("access token");
+  });
+
+  it("contains a rejected invalid-session cleanup in a stable error state", async () => {
+    const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({
+      ok: false,
+      kind: "invalid_session",
+    });
+    auth.signOutLocal.mockRejectedValue(
+      new Error("provider detail with refresh token"),
+    );
+
+    await expect(createIdentityService(auth).restore()).resolves.toEqual({
+      status: "error",
+      code: "AUTH_UNAVAILABLE",
+    });
+  });
+
+  it("contains a rejected anonymous sign-in and clears its retry handle", async () => {
+    const auth = createAuthPort();
+    auth.signInAnonymously
+      .mockRejectedValueOnce(new Error("provider detail with access token"))
+      .mockResolvedValueOnce({
+        ok: true,
+        identity: { userId: "guest-after-rejection", isAnonymous: true },
+      });
+    const service = createIdentityService(auth);
+
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "error",
+      code: "AUTH_UNAVAILABLE",
+    });
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "guest-after-rejection",
+    });
+    expect(auth.signInAnonymously).toHaveBeenCalledTimes(2);
   });
 
   it("maps a non-network anonymous Auth failure to a stable error", async () => {

@@ -50,6 +50,7 @@ function resultToState(result: AuthPortResult): IdentityState {
 export function createIdentityService(auth: IdentityAuthPort): IdentityService {
   let state: IdentityState = { status: "restoring" };
   const listeners = new Set<(next: IdentityState) => void>();
+  let restoreRequest: Promise<IdentityState> | null = null;
   let guestRequest: Promise<IdentityState> | null = null;
 
   function publish(next: IdentityState): IdentityState {
@@ -62,43 +63,88 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
     return next;
   }
 
-  return {
-    async restore() {
-      publish({ status: "restoring" });
+  function unavailable(): IdentityState {
+    return publish({ status: "error", code: "AUTH_UNAVAILABLE" });
+  }
 
-      const result = await auth.getCurrentIdentity();
-      if (!result.ok && result.kind === "invalid_session") {
-        const signOut = await auth.signOutLocal();
-        return publish(
-          signOut.ok
-            ? { status: "no_session" }
-            : { status: "error", code: "AUTH_UNAVAILABLE" },
-        );
-      }
+  function restore() {
+    if (restoreRequest !== null) {
+      return restoreRequest;
+    }
 
-      return publish(resultToState(result));
-    },
+    publish({ status: "restoring" });
 
-    ensureGuestSession() {
-      if (state.status === "guest" || state.status === "permanent") {
-        return Promise.resolve(state);
-      }
+    let request!: Promise<IdentityState>;
+    request = Promise.resolve()
+      .then(() => auth.getCurrentIdentity())
+      .then((result) => {
+        if (!result.ok && result.kind === "invalid_session") {
+          return Promise.resolve()
+            .then(() => auth.signOutLocal())
+            .then((signOut) =>
+              publish(
+                signOut.ok
+                  ? { status: "no_session" }
+                  : { status: "error", code: "AUTH_UNAVAILABLE" },
+              ),
+            );
+        }
 
-      if (guestRequest !== null) {
-        return guestRequest;
-      }
-
-      guestRequest = (async () => {
-        const result = await auth.signInAnonymously();
         return publish(resultToState(result));
-      })();
-
-      void guestRequest.finally(() => {
-        guestRequest = null;
+      })
+      .catch(unavailable)
+      .finally(() => {
+        if (restoreRequest === request) {
+          restoreRequest = null;
+        }
       });
 
+    restoreRequest = request;
+    return request;
+  }
+
+  function ensureGuestSession(): Promise<IdentityState> {
+    if (state.status === "guest" || state.status === "permanent") {
+      return Promise.resolve(state);
+    }
+
+    if (restoreRequest !== null) {
+      return restoreRequest.then((restoredState) =>
+        restoredState.status === "guest" || restoredState.status === "permanent"
+          ? restoredState
+          : ensureGuestSession(),
+      );
+    }
+
+    if (guestRequest !== null) {
       return guestRequest;
-    },
+    }
+
+    let request!: Promise<IdentityState>;
+    let signInRequest: Promise<AuthPortResult>;
+    try {
+      signInRequest = auth.signInAnonymously();
+    } catch {
+      signInRequest = Promise.reject();
+    }
+
+    request = signInRequest
+      .then((result) => publish(resultToState(result)))
+      .catch(unavailable)
+      .finally(() => {
+        if (guestRequest === request) {
+          guestRequest = null;
+        }
+      });
+
+    guestRequest = request;
+    return request;
+  }
+
+  return {
+    restore,
+
+    ensureGuestSession,
 
     getState() {
       return state;
