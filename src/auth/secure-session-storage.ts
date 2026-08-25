@@ -227,11 +227,16 @@ export function createSecureSessionStorage(
             throw new SessionStorageError("SESSION_STORAGE_UNAVAILABLE");
           }
 
-          await backend.setItemAsync(
-            manifestKey(base),
-            JSON.stringify({ version: 1, generation, chunks: chunks.length }),
-            secureStoreOptions,
-          );
+          try {
+            await backend.setItemAsync(
+              manifestKey(base),
+              JSON.stringify({ version: 1, generation, chunks: chunks.length }),
+              secureStoreOptions,
+            );
+          } catch (error) {
+            await deleteGenerationBestEffort(base, generation);
+            throw error;
+          }
 
           if (activeManifest !== null) {
             await deleteGeneration(base, activeManifest.generation);

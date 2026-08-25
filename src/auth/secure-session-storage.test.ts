@@ -167,6 +167,35 @@ describe("createSecureSessionStorage", () => {
     expect(values.size).toBe(0);
   });
 
+  it("cleans unpublished chunks when manifest publication fails", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+    const firstValue = "first-session";
+
+    await storage.setItem("sb-project-auth-token", firstValue);
+
+    backend.setItemAsync = jest.fn(async (key, value) => {
+      if (key === "adaptive_core.sb-project-auth-token.manifest") {
+        throw new Error("raw-secret");
+      }
+
+      values.set(key, value);
+    });
+
+    await expect(
+      storage.setItem("sb-project-auth-token", "x".repeat(2_000)),
+    ).rejects.toEqual(new SessionStorageError("SESSION_STORAGE_UNAVAILABLE"));
+
+    expect(await storage.getItem("sb-project-auth-token")).toBe(firstValue);
+
+    await storage.removeItem("sb-project-auth-token");
+
+    expect(
+      [...values.keys()].some((key) => key.includes(".chunk.2.")),
+    ).toBe(false);
+    expect(values.size).toBe(0);
+  });
+
   it("hides native failures behind a stable storage error", async () => {
     const { backend } = createMemoryBackend();
     backend.getItemAsync = jest.fn(async () => {
