@@ -108,6 +108,65 @@ describe("createSecureSessionStorage", () => {
     expect(await storage.getItem("sb-project-auth-token")).toBe(secondValue);
   });
 
+  it("retries the committed manifest when cleanup removes a generation being read", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+    const firstValue = "first-session";
+    const secondValue = "second-session";
+
+    await storage.setItem("sb-project-auth-token", firstValue);
+
+    const oldChunkReadStarted = createDeferred();
+    const finishOldChunkRead = createDeferred();
+    let shouldPauseOldChunkRead = true;
+    backend.getItemAsync = jest.fn(async (key) => {
+      if (
+        shouldPauseOldChunkRead &&
+        key === "adaptive_core.sb-project-auth-token.chunk.1.0"
+      ) {
+        shouldPauseOldChunkRead = false;
+        oldChunkReadStarted.resolve();
+        await finishOldChunkRead.promise;
+      }
+
+      return values.get(key) ?? null;
+    });
+
+    const pendingRead = storage.getItem("sb-project-auth-token");
+    await oldChunkReadStarted.promise;
+
+    await storage.setItem("sb-project-auth-token", secondValue);
+    finishOldChunkRead.resolve();
+
+    await expect(pendingRead).resolves.toBe(secondValue);
+  });
+
+  it("removes failed candidate-generation chunks before logout", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+
+    await storage.setItem("sb-project-auth-token", "first-session");
+
+    backend.setItemAsync = jest.fn(async (key, value) => {
+      if (key === "adaptive_core.sb-project-auth-token.chunk.2.1") {
+        throw new Error("raw-secret");
+      }
+
+      values.set(key, value);
+    });
+
+    await expect(
+      storage.setItem("sb-project-auth-token", "x".repeat(2_000)),
+    ).rejects.toEqual(new SessionStorageError("SESSION_STORAGE_UNAVAILABLE"));
+
+    await storage.removeItem("sb-project-auth-token");
+
+    expect(
+      [...values.keys()].some((key) => key.includes(".chunk.2.")),
+    ).toBe(false);
+    expect(values.size).toBe(0);
+  });
+
   it("hides native failures behind a stable storage error", async () => {
     const { backend } = createMemoryBackend();
     backend.getItemAsync = jest.fn(async () => {

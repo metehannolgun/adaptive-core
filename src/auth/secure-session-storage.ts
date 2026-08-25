@@ -121,6 +121,53 @@ export function createSecureSessionStorage(
     );
   }
 
+  async function deleteGenerationBestEffort(base: string, generation: number) {
+    await Promise.allSettled(
+      Array.from({ length: MAX_CHUNKS }, (_, index) =>
+        backend.deleteItemAsync(
+          chunkKey(base, generation, index),
+          secureStoreOptions,
+        ),
+      ),
+    );
+  }
+
+  async function readCommittedValue(base: string): Promise<string | null> {
+    while (true) {
+      const manifest = await readManifest(base);
+      if (manifest === null) {
+        return null;
+      }
+
+      const chunks = await Promise.all(
+        Array.from({ length: manifest.chunks }, async (_, index) =>
+          backend.getItemAsync(
+            chunkKey(base, manifest.generation, index),
+            secureStoreOptions,
+          ),
+        ),
+      );
+
+      if (chunks.every((chunk) => chunk !== null)) {
+        return chunks.join("");
+      }
+
+      const latestManifest = await readManifest(base);
+      if (
+        latestManifest === null ||
+        latestManifest.generation !== manifest.generation ||
+        latestManifest.chunks !== manifest.chunks
+      ) {
+        if (latestManifest === null) {
+          return null;
+        }
+        continue;
+      }
+
+      throw new SessionStorageError("CORRUPT_SESSION_STORAGE");
+    }
+  }
+
   function enqueueWrite(
     key: string,
     operation: () => Promise<void>,
@@ -150,25 +197,7 @@ export function createSecureSessionStorage(
       const base = baseKey(key);
 
       try {
-        const manifest = await readManifest(base);
-        if (manifest === null) {
-          return null;
-        }
-
-        const chunks = await Promise.all(
-          Array.from({ length: manifest.chunks }, async (_, index) => {
-            const chunk = await backend.getItemAsync(
-              chunkKey(base, manifest.generation, index),
-              secureStoreOptions,
-            );
-            if (chunk === null) {
-              throw new SessionStorageError("CORRUPT_SESSION_STORAGE");
-            }
-            return chunk;
-          }),
-        );
-
-        return chunks.join("");
+        return await readCommittedValue(base);
       } catch (error) {
         throw asStorageError(error);
       }
@@ -183,7 +212,7 @@ export function createSecureSessionStorage(
           const activeManifest = await readManifest(base);
           const generation = (activeManifest?.generation ?? 0) + 1;
 
-          await Promise.all(
+          const candidateWrites = await Promise.allSettled(
             chunks.map((chunk, index) =>
               backend.setItemAsync(
                 chunkKey(base, generation, index),
@@ -192,6 +221,11 @@ export function createSecureSessionStorage(
               ),
             ),
           );
+
+          if (candidateWrites.some((result) => result.status === "rejected")) {
+            await deleteGenerationBestEffort(base, generation);
+            throw new SessionStorageError("SESSION_STORAGE_UNAVAILABLE");
+          }
 
           await backend.setItemAsync(
             manifestKey(base),
