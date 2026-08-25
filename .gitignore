@@ -2,3 +2,9 @@ node_modules/
 .expo/
 .worktrees/
 .DS_Store
+.env
+.env.*
+!.env.example
+supabase/.branches/
+supabase/.temp/
+supabase/.env
