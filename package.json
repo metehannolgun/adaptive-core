@@ -16,7 +16,8 @@
     "db:reset": "supabase db reset --local",
     "db:test": "supabase test db --local",
     "db:lint": "supabase db lint --local --level warning",
-    "auth:test:otp": "node supabase/tests/auth-email-otp.test.mjs"
+    "auth:test:otp": "node supabase/tests/auth-email-otp.test.mjs",
+    "auth:test:anonymous": "node supabase/tests/auth-anonymous-bootstrap.test.mjs"
   },
   "dependencies": {
     "@react-navigation/native": "^7.3.16",
