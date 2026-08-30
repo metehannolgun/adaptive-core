@@ -16,19 +16,24 @@
     "db:reset": "supabase db reset --local",
     "db:test": "supabase test db --local",
     "db:lint": "supabase db lint --local --level warning",
-    "auth:test:otp": "node supabase/tests/auth-email-otp.test.mjs"
+    "auth:test:otp": "node supabase/tests/auth-email-otp.test.mjs",
+    "auth:test:anonymous": "node supabase/tests/auth-anonymous-bootstrap.test.mjs"
   },
   "dependencies": {
     "@react-navigation/native": "^7.3.16",
     "@react-navigation/native-stack": "^7.18.8",
+    "@supabase/supabase-js": "^2.112.4",
     "expo": "~54.0.37",
     "expo-localization": "~17.0.9",
+    "expo-secure-store": "~15.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "i18next": "^26.3.6",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0"
+    "react-native-screens": "~4.16.0",
+    "react-native-url-polyfill": "^4.0.0"
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
