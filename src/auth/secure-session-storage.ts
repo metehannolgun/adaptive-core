@@ -105,7 +105,7 @@ function asStorageError(error: unknown): SessionStorageError {
 export function createSecureSessionStorage(
   backend: SecureStoreBackend = SecureStore,
 ): SupabaseSessionStorage {
-  const writeOperations = new Map<string, Promise<void>>();
+  const operations = new Map<string, Promise<unknown>>();
 
   async function readManifest(base: string): Promise<Manifest | null> {
     return parseManifest(
@@ -187,23 +187,23 @@ export function createSecureSessionStorage(
     }
   }
 
-  function enqueueWrite(
+  function enqueueOperation<T>(
     key: string,
-    operation: () => Promise<void>,
-  ): Promise<void> {
-    const previous = writeOperations.get(key) ?? Promise.resolve();
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = operations.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(operation);
 
-    writeOperations.set(key, next);
+    operations.set(key, next);
     void next.then(
       () => {
-        if (writeOperations.get(key) === next) {
-          writeOperations.delete(key);
+        if (operations.get(key) === next) {
+          operations.delete(key);
         }
       },
       () => {
-        if (writeOperations.get(key) === next) {
-          writeOperations.delete(key);
+        if (operations.get(key) === next) {
+          operations.delete(key);
         }
       },
     );
@@ -215,18 +215,20 @@ export function createSecureSessionStorage(
     async getItem(key) {
       const base = baseKey(key);
 
-      try {
-        return await readCommittedValue(base);
-      } catch (error) {
-        throw asStorageError(error);
-      }
+      return enqueueOperation(key, async () => {
+        try {
+          return await readCommittedValue(base);
+        } catch (error) {
+          throw asStorageError(error);
+        }
+      });
     },
 
     async setItem(key, value) {
       const base = baseKey(key);
       const chunks = splitValue(value);
 
-      return enqueueWrite(key, async () => {
+      return enqueueOperation(key, async () => {
         try {
           const activeManifest = await readManifest(base);
           const generation: StorageGeneration =
@@ -278,7 +280,7 @@ export function createSecureSessionStorage(
     async removeItem(key) {
       const base = baseKey(key);
 
-      return enqueueWrite(key, async () => {
+      return enqueueOperation(key, async () => {
         try {
           // The manifest is the only publication pointer. Delete it without
           // parsing so malformed or missing-chunk state can always be invalidated.

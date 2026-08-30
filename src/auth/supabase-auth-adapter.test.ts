@@ -131,6 +131,7 @@ describe("createSupabaseAuthAdapter", () => {
 
   it.each([
     "bad_jwt",
+    "invalid_jwt",
     "session_not_found",
     "refresh_token_not_found",
     "refresh_token_already_used",
@@ -148,6 +149,25 @@ describe("createSupabaseAuthAdapter", () => {
         authStorageKey,
       ).getCurrentIdentity(),
     ).resolves.toEqual({ ok: false, kind: "invalid_session" });
+  });
+
+  it("clears an SDK invalid_jwt session and restores to no_session", async () => {
+    const { auth, client } = createClient();
+    auth.getClaims = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: new AuthError("provider detail", 401, "invalid_jwt"),
+      })
+      .mockResolvedValueOnce({ data: null, error: null });
+    auth.signOut = jest.fn().mockResolvedValue({ error: null });
+    const service = createIdentityService(
+      createSupabaseAuthAdapter(client, sessionStorage, authStorageKey),
+    );
+
+    await expect(service.restore()).resolves.toEqual({ status: "no_session" });
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(auth.getClaims).toHaveBeenCalledTimes(1);
   });
 
   it("distinguishes corrupt session storage from an unavailable backend", async () => {

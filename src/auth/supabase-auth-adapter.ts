@@ -38,6 +38,7 @@ type SupabaseAuthClient = Pick<
 
 const invalidSessionCodes = new Set([
   "bad_jwt",
+  "invalid_jwt",
   "session_not_found",
   "refresh_token_not_found",
   "refresh_token_already_used",

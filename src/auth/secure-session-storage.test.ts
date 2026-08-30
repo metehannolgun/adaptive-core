@@ -31,6 +31,12 @@ function createDeferred() {
   };
 }
 
+async function flushMicrotasks() {
+  for (let index = 0; index < 10; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("createSecureSessionStorage", () => {
   it("round-trips a session larger than a single SecureStore item", async () => {
     const { backend } = createMemoryBackend();
@@ -94,7 +100,7 @@ describe("createSecureSessionStorage", () => {
     await expect(storage.getItem("sb-project-auth-token")).resolves.toBeNull();
   });
 
-  it("keeps the previous committed generation visible during a write", async () => {
+  it("waits for an in-progress write before reading the committed generation", async () => {
     const { backend, values } = createMemoryBackend();
     const storage = createSecureSessionStorage(backend);
     const firstValue = "first-session";
@@ -115,48 +121,68 @@ describe("createSecureSessionStorage", () => {
     const pendingWrite = storage.setItem("sb-project-auth-token", secondValue);
     await secondGenerationStarted.promise;
 
-    expect(await storage.getItem("sb-project-auth-token")).toBe(firstValue);
+    let readSettled = false;
+    const pendingRead = storage.getItem("sb-project-auth-token").then((value) => {
+      readSettled = true;
+      return value;
+    });
+    await flushMicrotasks();
+
+    expect(readSettled).toBe(false);
 
     secondGenerationWrite.resolve();
     await pendingWrite;
 
-    expect(await storage.getItem("sb-project-auth-token")).toBe(secondValue);
+    await expect(pendingRead).resolves.toBe(secondValue);
   });
 
-  it("retries the committed manifest when cleanup removes a generation being read", async () => {
+  it("serializes a paused read ahead of two generation-reusing writes", async () => {
     const { backend, values } = createMemoryBackend();
     const storage = createSecureSessionStorage(backend);
-    const firstValue = "first-session";
-    const secondValue = "second-session";
+    const firstValue = "a".repeat(2_000);
+    const secondValue = "b".repeat(2_000);
+    const thirdValue = "c".repeat(2_000);
 
     await storage.setItem("sb-project-auth-token", firstValue);
 
-    const oldChunkReadStarted = createDeferred();
-    const finishOldChunkRead = createDeferred();
-    let shouldPauseOldChunkRead = true;
+    const chunkReadStarted = createDeferred();
+    const finishChunkRead = createDeferred();
+    let shouldPauseChunkRead = true;
     backend.getItemAsync = jest.fn(async (key) => {
       if (
-        shouldPauseOldChunkRead &&
+        shouldPauseChunkRead &&
         key === "adaptive_core.sb-project-auth-token.chunk.1.0"
       ) {
-        shouldPauseOldChunkRead = false;
-        oldChunkReadStarted.resolve();
-        await finishOldChunkRead.promise;
+        shouldPauseChunkRead = false;
+        chunkReadStarted.resolve();
+        await finishChunkRead.promise;
       }
 
       return values.get(key) ?? null;
     });
+    (backend.deleteItemAsync as jest.Mock).mockClear();
 
     const pendingRead = storage.getItem("sb-project-auth-token");
-    await oldChunkReadStarted.promise;
+    await chunkReadStarted.promise;
 
-    await storage.setItem("sb-project-auth-token", secondValue);
-    finishOldChunkRead.resolve();
+    const secondWrite = storage.setItem("sb-project-auth-token", secondValue);
+    const thirdWrite = storage.setItem("sb-project-auth-token", thirdValue);
+    await flushMicrotasks();
 
-    await expect(pendingRead).resolves.toBe(secondValue);
+    // Reads and writes share one per-key queue, so neither write can recycle
+    // generation 1 while this reader still holds its chunks.
+    expect(backend.deleteItemAsync).not.toHaveBeenCalled();
+
+    finishChunkRead.resolve();
+    await expect(pendingRead).resolves.toBe(firstValue);
+    await secondWrite;
+    await thirdWrite;
+    await expect(storage.getItem("sb-project-auth-token")).resolves.toBe(
+      thirdValue,
+    );
   });
 
-  it("does not return a session removed while its chunks were being read", async () => {
+  it("serializes removal after an in-progress read", async () => {
     const { backend, values } = createMemoryBackend();
     const storage = createSecureSessionStorage(backend);
 
@@ -175,10 +201,18 @@ describe("createSecureSessionStorage", () => {
 
     const pendingRead = storage.getItem("sb-project-auth-token");
     await chunkReadStarted.promise;
-    await storage.removeItem("sb-project-auth-token");
+    const pendingRemoval = storage.removeItem("sb-project-auth-token");
+    await flushMicrotasks();
+
+    expect(
+      values.has("adaptive_core.sb-project-auth-token.manifest"),
+    ).toBe(true);
+
     finishChunkRead.resolve();
 
-    await expect(pendingRead).resolves.toBeNull();
+    await expect(pendingRead).resolves.toBe("existing-session");
+    await pendingRemoval;
+    await expect(storage.getItem("sb-project-auth-token")).resolves.toBeNull();
   });
 
   it("removes failed candidate-generation chunks before logout", async () => {
