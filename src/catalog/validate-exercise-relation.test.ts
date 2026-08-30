@@ -21,6 +21,7 @@ const deadBug: Exercise = {
   defaultLoad: 6,
   maxLoad: 12,
   loadStep: 2,
+  estimatedSecondsPerUnit: 4,
   defaultSets: 2,
   minRestSeconds: 15,
   maxRestSeconds: 45,

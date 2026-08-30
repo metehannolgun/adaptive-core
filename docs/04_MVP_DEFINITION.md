@@ -18,6 +18,7 @@
 - Guest-first anonymous identity (no account blocks first value)
 - One-tap optional analytics choice on Welcome
 - Three single-question steps: experience, duration, movement limitations
+- Optional coarse body-area choice for an active movement limitation (predefined list, no free text)
 - Duration: 5, 10, or 15 minutes
 - Bodyweight-only communicated as info, not a question
 
@@ -41,7 +42,7 @@
 
 ### Feedback
 - Post-workout: easy | appropriate | hard | incomplete | pain
-- Pain → body-area capture (predefined list, no free text)
+- Pain during an exercise → exclude the known exercise; do not recapture or retain a pain body area
 - Exercise-level pain/incomplete overrides session outcome
 - "What we learned" explanation with reason codes
 

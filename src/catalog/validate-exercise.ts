@@ -36,6 +36,10 @@ export function validateExercise(
     issues.push("INVALID_LOAD_STEP");
   }
 
+  if (!isPositiveNumber(exercise.estimatedSecondsPerUnit)) {
+    issues.push("INVALID_ESTIMATED_SECONDS_PER_UNIT");
+  }
+
   if (!isPositiveInteger(exercise.defaultSets)) {
     issues.push("INVALID_DEFAULT_SETS");
   }
@@ -73,6 +77,10 @@ function isBlank(value: string | null): boolean {
 
 function isPositiveInteger(value: number): boolean {
   return Number.isInteger(value) && value > 0;
+}
+
+function isPositiveNumber(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
 }
 
 function isNonNegativeInteger(value: number): boolean {

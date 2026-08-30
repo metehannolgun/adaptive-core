@@ -32,6 +32,7 @@ type Exercise = {
   minLoad: number;
   maxLoad: number;
   loadStep: number;
+  estimatedSecondsPerUnit: number;
   defaultSets: number;
   minRestSeconds: number;
   maxRestSeconds: number;
@@ -68,6 +69,11 @@ type ExerciseRelation = {
   status: "draft" | "reviewed" | "active";
 };
 ```
+
+`estimatedSecondsPerUnit` is engine metadata used only for duration
+estimation. It is `1` for `seconds` exercises. Rep-based exercises use a
+positive, reviewed per-exercise estimate because different movements take
+different time to perform safely.
 
 ## Media Schema
 
@@ -124,6 +130,7 @@ side plank from knees → side plank → side plank reach
 - EN/TR content records: same required fields, compatible safety meaning
 - minLoad ≤ defaultLoad ≤ maxLoad
 - Valid loadStep for load mode
+- Positive, finite estimatedSecondsPerUnit
 - Active non-foundation exercise has ≥1 reviewed regression
 - No self-referencing or circular 2-node progression without approval
 - Substitutes share compatible primary pattern, don't increase demand

@@ -105,7 +105,16 @@ Each workout uses a duration-appropriate subset. Across sessions, avoid persiste
 ```
 exercise work + inter-set rest + transitions + instruction allowance = estimated duration
 ```
-Fill within tolerance below budget. Never exceed to hit movement quota.
+
+Exercise work is estimated from `prescribed load × estimatedSecondsPerUnit × sets`.
+For `seconds` load mode, `estimatedSecondsPerUnit` is `1`; rep-based modes use
+the reviewed exercise-specific catalog value.
+
+Use 10 seconds between exercises. A valid composition fills at least 80% of
+the selected duration and never exceeds it. If an ordered composition exceeds
+the budget, remove trailing exercises until it fits. Never add load or sets to
+fill time. If the remaining composition is below 80%, return
+`INSUFFICIENT_DURATION_COVERAGE` instead of presenting it as a valid workout.
 
 ### Ordering
 - Greater coordination first (user is fresh)
@@ -137,6 +146,7 @@ Randomness breaks ties only with stored reproducible seed.
 
 ```typescript
 type ExplanationCode =
+  | "LOAD_HOLD_EASY_STREAK"
   | "LOAD_UP_EASY_SUCCESS"
   | "LOAD_HOLD_APPROPRIATE"
   | "LOAD_HOLD_HARD"
@@ -150,21 +160,28 @@ type ExplanationCode =
   | "RETURN_AFTER_BREAK";
 ```
 
+- `LOAD_HOLD_EASY_STREAK`: first consecutive easy result, or a later easy result when no reviewed load/complexity progression is available.
+- `LOAD_UP_EASY_SUCCESS`: emitted only when load increases by one step or one reviewed progression edge is traversed.
+
 ## Generator Pseudocode
 
 ```typescript
-function generateNextWorkout(input: GeneratorInput): WorkoutPrescription {
-  const recovered = decayFatigueByElapsedTime(input.state, input.now);
-  const eligible = filterEligibleExercises(input.catalog, input.constraints, recovered);
-  const targets = choosePatternTargets(eligible, recovered, input.durationMinutes);
-  const selected = selectControlledVariation(eligible, targets, input.history, input.seed);
-  const loaded = prescribeConservativeLoads(selected, recovered, input.policy);
-  const ordered = orderExercises(loaded, input.policy);
-  const fitted = fitToTimeBudget(ordered, input.durationMinutes, input.policy);
-  assertSafetyInvariants(fitted, input.constraints);
-  return attachVersionsAndExplanations(fitted, input);
-}
+function generateNextWorkout(
+  input: GenerateNextWorkoutInput,
+): WorkoutGenerationResult;
 ```
+
+The pure orchestrator validates the complete catalog snapshot, assesses
+recovery, filters eligibility, selects pattern targets and exercises,
+prescribes conservative loads, orders the items, fits the duration, and
+validates final safety in that order. It returns the first typed failure
+reached: `INVALID_CATALOG`, `NO_ELIGIBLE_EXERCISES`,
+`INSUFFICIENT_DURATION_COVERAGE`, or `SAFETY_VIOLATION`.
+
+Safety validation returns typed violation codes instead of throwing. A result
+with any violation must not be published as a workout. Only a successful
+result contains the complete prescription, explanation codes, seed, and
+engine, policy, and catalog versions.
 
 ## Mandatory Test Scenarios
 
