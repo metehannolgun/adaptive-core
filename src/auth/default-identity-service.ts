@@ -50,7 +50,13 @@ function createDefaultIdentityService(): IdentityService {
 
   const storage = createSecureSessionStorage();
   const managedClient = createManagedSupabaseClient(config.value, storage);
-  return createIdentityService(createSupabaseAuthAdapter(managedClient.client));
+  return createIdentityService(
+    createSupabaseAuthAdapter(
+      managedClient.client,
+      storage,
+      managedClient.authStorageKey,
+    ),
+  );
 }
 
 export const defaultIdentityService = createDefaultIdentityService();

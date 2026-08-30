@@ -77,6 +77,7 @@ describe("createManagedSupabaseClient", () => {
       {
         auth: {
           storage,
+          storageKey: "sb-127-auth-token",
           autoRefreshToken: true,
           persistSession: true,
           detectSessionInUrl: false,
@@ -85,6 +86,7 @@ describe("createManagedSupabaseClient", () => {
       },
     );
     expect(managed.client).toBe(harness.client);
+    expect(managed.authStorageKey).toBe("sb-127-auth-token");
     expect(harness.appState.addEventListener).toHaveBeenCalledTimes(1);
     expect(harness.startAutoRefresh).toHaveBeenCalledTimes(1);
     expect(harness.stopAutoRefresh).not.toHaveBeenCalled();

@@ -3,7 +3,10 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 
-import { SessionStorageError } from "./secure-session-storage";
+import {
+  SessionStorageError,
+  type SupabaseSessionStorage,
+} from "./secure-session-storage";
 import type { Database } from "../database/database.types";
 
 export type AuthIdentity = {
@@ -14,6 +17,7 @@ export type AuthIdentity = {
 export type AuthPortFailureKind =
   | "network"
   | "invalid_session"
+  | "corrupt_storage"
   | "storage"
   | "auth";
 
@@ -27,7 +31,10 @@ export type IdentityAuthPort = {
   signOutLocal(): Promise<{ ok: true } | { ok: false; kind: "auth" }>;
 };
 
-type SupabaseAuthClient = Pick<SupabaseClient<Database>, "auth">;
+type SupabaseAuthClient = Pick<
+  SupabaseClient<Database>["auth"],
+  "getClaims" | "signInAnonymously" | "signOut"
+>;
 
 const invalidSessionCodes = new Set([
   "bad_jwt",
@@ -46,7 +53,9 @@ function readErrorField(error: unknown, field: "code" | "status") {
 
 function mapAuthFailure(error: unknown): AuthPortResult {
   if (error instanceof SessionStorageError) {
-    return { ok: false, kind: "storage" };
+    return error.code === "CORRUPT_SESSION_STORAGE"
+      ? { ok: false, kind: "corrupt_storage" }
+      : { ok: false, kind: "storage" };
   }
 
   if (
@@ -64,34 +73,72 @@ function mapAuthFailure(error: unknown): AuthPortResult {
   return { ok: false, kind: "auth" };
 }
 
-function identityFromSession(
-  session: Awaited<ReturnType<SupabaseAuthClient["auth"]["getSession"]>>["data"]["session"],
-): AuthIdentity | null {
-  if (session === null) {
-    return null;
+function identityFromVerifiedClaims(data: unknown): AuthPortResult {
+  if (data === null) {
+    return { ok: true, identity: null };
+  }
+
+  if (
+    typeof data !== "object" ||
+    !("claims" in data) ||
+    typeof data.claims !== "object" ||
+    data.claims === null ||
+    !("sub" in data.claims) ||
+    typeof data.claims.sub !== "string" ||
+    data.claims.sub.length === 0
+  ) {
+    return { ok: false, kind: "auth" };
   }
 
   return {
-    userId: session.user.id,
-    isAnonymous: session.user.is_anonymous === true,
+    ok: true,
+    identity: {
+      userId: data.claims.sub,
+      isAnonymous:
+        "is_anonymous" in data.claims && data.claims.is_anonymous === true,
+    },
   };
 }
 
 export function createSupabaseAuthAdapter(
-  client: SupabaseAuthClient,
+  client: { auth: SupabaseAuthClient },
+  sessionStorage: SupabaseSessionStorage,
+  authStorageKey: string,
 ): IdentityAuthPort {
-  return {
-    async getCurrentIdentity() {
-      try {
-        const { data, error } = await client.auth.getSession();
-        if (error !== null) {
-          return mapAuthFailure(error);
-        }
+  let corruptStorageObserved = false;
 
-        return { ok: true, identity: identityFromSession(data.session) };
-      } catch (error) {
-        return mapAuthFailure(error);
+  function rememberStorageCorruption(result: AuthPortResult) {
+    if (!result.ok && result.kind === "corrupt_storage") {
+      corruptStorageObserved = true;
+    }
+    return result;
+  }
+
+  async function getVerifiedIdentity(
+    jwt?: string,
+    identityRequired = false,
+  ): Promise<AuthPortResult> {
+    try {
+      const { data, error } = await client.auth.getClaims(jwt);
+      if (error !== null) {
+        return rememberStorageCorruption(mapAuthFailure(error));
       }
+
+      const result = identityFromVerifiedClaims(data);
+      if (identityRequired && result.ok && result.identity === null) {
+        return { ok: false, kind: "auth" };
+      }
+      return result;
+    } catch (error) {
+      return rememberStorageCorruption(mapAuthFailure(error));
+    }
+  }
+
+  return {
+    getCurrentIdentity() {
+      // getClaims verifies the JWT signature (or asks Auth to verify it) before
+      // any identity reaches application state; stored session.user is untrusted.
+      return getVerifiedIdentity();
     },
 
     async signInAnonymously() {
@@ -101,13 +148,30 @@ export function createSupabaseAuthAdapter(
           return mapAuthFailure(error);
         }
 
-        return { ok: true, identity: identityFromSession(data.session) };
+        const accessToken = data.session?.access_token;
+        if (typeof accessToken !== "string" || accessToken.length === 0) {
+          return { ok: false, kind: "auth" };
+        }
+
+        return await getVerifiedIdentity(accessToken, true);
       } catch (error) {
         return mapAuthFailure(error);
       }
     },
 
     async signOutLocal() {
+      if (corruptStorageObserved) {
+        try {
+          // Supabase signOut reads the current session first. Directly remove
+          // the known storage slot when that read itself is what is corrupt.
+          await sessionStorage.removeItem(authStorageKey);
+          corruptStorageObserved = false;
+          return { ok: true };
+        } catch {
+          return { ok: false, kind: "auth" };
+        }
+      }
+
       try {
         const { error } = await client.auth.signOut({ scope: "local" });
         return error === null ? { ok: true } : { ok: false, kind: "auth" };

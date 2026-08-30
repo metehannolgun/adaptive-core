@@ -3,10 +3,13 @@ import * as SecureStore from "expo-secure-store";
 const CHUNK_LENGTH = 1_800;
 const MAX_CHUNKS = 32;
 const KEY_PATTERN = /^[A-Za-z0-9._-]+$/;
+const GENERATIONS = [1, 2] as const;
+
+type StorageGeneration = (typeof GENERATIONS)[number];
 
 type Manifest = {
   version: 1;
-  generation: number;
+  generation: StorageGeneration;
   chunks: number;
 };
 
@@ -67,7 +70,7 @@ function parseManifest(value: string | null): Manifest | null {
       parsed.version === 1 &&
       "generation" in parsed &&
       typeof parsed.generation === "number" &&
-      Number.isSafeInteger(parsed.generation) &&
+      GENERATIONS.some((generation) => generation === parsed.generation) &&
       "chunks" in parsed &&
       typeof parsed.chunks === "number" &&
       Number.isInteger(parsed.chunks) &&
@@ -111,23 +114,39 @@ export function createSecureSessionStorage(
   }
 
   async function deleteGeneration(base: string, generation: number) {
-    await Promise.all(
+    const results = await Promise.allSettled(
       Array.from({ length: MAX_CHUNKS }, (_, index) =>
-        backend.deleteItemAsync(
-          chunkKey(base, generation, index),
-          secureStoreOptions,
+        Promise.resolve().then(() =>
+          backend.deleteItemAsync(
+            chunkKey(base, generation, index),
+            secureStoreOptions,
+          ),
         ),
       ),
     );
+
+    if (results.some((result) => result.status === "rejected")) {
+      throw new SessionStorageError("SESSION_STORAGE_UNAVAILABLE");
+    }
   }
 
   async function deleteGenerationBestEffort(base: string, generation: number) {
     await Promise.allSettled(
       Array.from({ length: MAX_CHUNKS }, (_, index) =>
-        backend.deleteItemAsync(
-          chunkKey(base, generation, index),
-          secureStoreOptions,
+        Promise.resolve().then(() =>
+          backend.deleteItemAsync(
+            chunkKey(base, generation, index),
+            secureStoreOptions,
+          ),
         ),
+      ),
+    );
+  }
+
+  async function deleteAllGenerationsBestEffort(base: string) {
+    await Promise.allSettled(
+      GENERATIONS.map((generation) =>
+        deleteGenerationBestEffort(base, generation),
       ),
     );
   }
@@ -148,20 +167,20 @@ export function createSecureSessionStorage(
         ),
       );
 
-      if (chunks.every((chunk) => chunk !== null)) {
-        return chunks.join("");
+      const latestManifest = await readManifest(base);
+      if (latestManifest === null) {
+        return null;
       }
 
-      const latestManifest = await readManifest(base);
       if (
-        latestManifest === null ||
         latestManifest.generation !== manifest.generation ||
         latestManifest.chunks !== manifest.chunks
       ) {
-        if (latestManifest === null) {
-          return null;
-        }
         continue;
+      }
+
+      if (chunks.every((chunk) => chunk !== null)) {
+        return chunks.join("");
       }
 
       throw new SessionStorageError("CORRUPT_SESSION_STORAGE");
@@ -210,7 +229,13 @@ export function createSecureSessionStorage(
       return enqueueWrite(key, async () => {
         try {
           const activeManifest = await readManifest(base);
-          const generation = (activeManifest?.generation ?? 0) + 1;
+          const generation: StorageGeneration =
+            activeManifest?.generation === 1 ? 2 : 1;
+
+          // A failed earlier cleanup can leave fragments in the inactive slot.
+          // Clear it before reuse so chunk keys stay bounded and old token bytes
+          // cannot survive when the replacement session has fewer chunks.
+          await deleteGeneration(base, generation);
 
           const candidateWrites = await Promise.allSettled(
             chunks.map((chunk, index) =>
@@ -239,7 +264,10 @@ export function createSecureSessionStorage(
           }
 
           if (activeManifest !== null) {
-            await deleteGeneration(base, activeManifest.generation);
+            // The manifest switch above committed the new session. Cleanup is
+            // deliberately best-effort so callers never retry a signup whose
+            // session was already stored successfully.
+            await deleteGenerationBestEffort(base, activeManifest.generation);
           }
         } catch (error) {
           throw asStorageError(error);
@@ -252,14 +280,10 @@ export function createSecureSessionStorage(
 
       return enqueueWrite(key, async () => {
         try {
-          const activeManifest = await readManifest(base);
-
+          // The manifest is the only publication pointer. Delete it without
+          // parsing so malformed or missing-chunk state can always be invalidated.
           await backend.deleteItemAsync(manifestKey(base), secureStoreOptions);
-
-          if (activeManifest !== null) {
-            await deleteGeneration(base, activeManifest.generation);
-            await deleteGeneration(base, activeManifest.generation - 1);
-          }
+          await deleteAllGenerationsBestEffort(base);
         } catch (error) {
           throw asStorageError(error);
         }

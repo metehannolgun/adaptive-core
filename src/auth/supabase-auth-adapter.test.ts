@@ -4,18 +4,31 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 
-import { SessionStorageError } from "./secure-session-storage";
+import {
+  createSecureSessionStorage,
+  SessionStorageError,
+  type SecureStoreBackend,
+  type SupabaseSessionStorage,
+} from "./secure-session-storage";
+import { createIdentityService } from "./identity-service";
 import { createSupabaseAuthAdapter } from "./supabase-auth-adapter";
 import type { Database } from "../database/database.types";
 
 type AuthMethods = Pick<
   SupabaseClient<Database>["auth"],
-  "getSession" | "signInAnonymously" | "signOut"
+  "getClaims" | "signInAnonymously" | "signOut"
 >;
+
+const sessionStorage: SupabaseSessionStorage = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+};
+const authStorageKey = "adaptive-core-auth";
 
 function createClient() {
   const auth = {
-    getSession: jest.fn(),
+    getClaims: jest.fn(),
     signInAnonymously: jest.fn(),
     signOut: jest.fn(),
   } as unknown as AuthMethods;
@@ -34,36 +47,50 @@ function session(userId: string, isAnonymous: boolean) {
   };
 }
 
+function verifiedClaims(userId: string, isAnonymous: boolean) {
+  return {
+    data: {
+      claims: { sub: userId, is_anonymous: isAnonymous },
+      header: {},
+      signature: new Uint8Array(),
+    },
+    error: null,
+  };
+}
+
+function createMemoryBackend() {
+  const values = new Map<string, string>();
+  const backend: SecureStoreBackend = {
+    getItemAsync: jest.fn(async (key) => values.get(key) ?? null),
+    setItemAsync: jest.fn(async (key, value) => {
+      values.set(key, value);
+    }),
+    deleteItemAsync: jest.fn(async (key) => {
+      values.delete(key);
+    }),
+  };
+
+  return { backend, values };
+}
+
 describe("createSupabaseAuthAdapter", () => {
-  it("maps an anonymous session to a token-free guest identity", async () => {
+  it("maps only verified claims to token-free guest and permanent identities", async () => {
     const { auth, client } = createClient();
-    auth.getSession = jest.fn().mockResolvedValue({
-      data: { session: session("guest-a", true) },
-      error: null,
-    });
-    const adapter = createSupabaseAuthAdapter(client);
+    auth.getClaims = jest
+      .fn()
+      .mockResolvedValueOnce(verifiedClaims("guest-a", true))
+      .mockResolvedValueOnce(verifiedClaims("member-a", false))
+      .mockResolvedValueOnce({ data: null, error: null });
+    const adapter = createSupabaseAuthAdapter(
+      client,
+      sessionStorage,
+      authStorageKey,
+    );
 
-    const result = await adapter.getCurrentIdentity();
-
-    expect(result).toEqual({
+    await expect(adapter.getCurrentIdentity()).resolves.toEqual({
       ok: true,
       identity: { userId: "guest-a", isAnonymous: true },
     });
-    expect(JSON.stringify(result)).not.toContain("access-token-that-must-never-leave-the-adapter");
-    expect(JSON.stringify(result)).not.toContain("refresh-token-that-must-never-leave-the-adapter");
-  });
-
-  it("maps permanent users and an absent session without exposing provider data", async () => {
-    const { auth, client } = createClient();
-    auth.getSession = jest
-      .fn()
-      .mockResolvedValueOnce({
-        data: { session: session("member-a", false) },
-        error: null,
-      })
-      .mockResolvedValueOnce({ data: { session: null }, error: null });
-    const adapter = createSupabaseAuthAdapter(client);
-
     await expect(adapter.getCurrentIdentity()).resolves.toEqual({
       ok: true,
       identity: { userId: "member-a", isAnonymous: false },
@@ -74,25 +101,29 @@ describe("createSupabaseAuthAdapter", () => {
     });
   });
 
-  it("maps retryable and status-zero anonymous sign-in failures to network", async () => {
+  it("maps verified-claims network failures to offline without publishing local identity", async () => {
     const { auth, client } = createClient();
-    auth.signInAnonymously = jest
+    auth.getClaims = jest
       .fn()
       .mockResolvedValueOnce({
-        data: { session: null },
+        data: null,
         error: new AuthRetryableFetchError("temporary failure", 503),
       })
       .mockResolvedValueOnce({
-        data: { session: null },
+        data: null,
         error: new AuthError("offline", 0),
       });
-    const adapter = createSupabaseAuthAdapter(client);
+    const adapter = createSupabaseAuthAdapter(
+      client,
+      sessionStorage,
+      authStorageKey,
+    );
 
-    await expect(adapter.signInAnonymously()).resolves.toEqual({
+    await expect(adapter.getCurrentIdentity()).resolves.toEqual({
       ok: false,
       kind: "network",
     });
-    await expect(adapter.signInAnonymously()).resolves.toEqual({
+    await expect(adapter.getCurrentIdentity()).resolves.toEqual({
       ok: false,
       kind: "network",
     });
@@ -105,50 +136,114 @@ describe("createSupabaseAuthAdapter", () => {
     "refresh_token_already_used",
   ])("maps %s to invalid_session", async (code) => {
     const { auth, client } = createClient();
-    auth.getSession = jest.fn().mockResolvedValue({
-      data: { session: null },
+    auth.getClaims = jest.fn().mockResolvedValue({
+      data: null,
       error: new AuthError("provider detail", 401, code),
     });
 
     await expect(
-      createSupabaseAuthAdapter(client).getCurrentIdentity(),
+      createSupabaseAuthAdapter(
+        client,
+        sessionStorage,
+        authStorageKey,
+      ).getCurrentIdentity(),
     ).resolves.toEqual({ ok: false, kind: "invalid_session" });
   });
 
-  it("maps storage exceptions and all other Auth failures to stable kinds", async () => {
+  it("distinguishes corrupt session storage from an unavailable backend", async () => {
     const { auth, client } = createClient();
-    auth.getSession = jest
+    auth.getClaims = jest
       .fn()
+      .mockRejectedValueOnce(new SessionStorageError("CORRUPT_SESSION_STORAGE"))
       .mockRejectedValueOnce(
         new SessionStorageError("SESSION_STORAGE_UNAVAILABLE"),
-      )
-      .mockRejectedValueOnce(new AuthError("provider detail", 500, "unknown"));
-    const adapter = createSupabaseAuthAdapter(client);
+      );
+    const adapter = createSupabaseAuthAdapter(
+      client,
+      sessionStorage,
+      authStorageKey,
+    );
 
+    await expect(adapter.getCurrentIdentity()).resolves.toEqual({
+      ok: false,
+      kind: "corrupt_storage",
+    });
     await expect(adapter.getCurrentIdentity()).resolves.toEqual({
       ok: false,
       kind: "storage",
     });
-    await expect(adapter.getCurrentIdentity()).resolves.toEqual({
-      ok: false,
-      kind: "auth",
-    });
   });
 
-  it("returns a token-free anonymous sign-in identity", async () => {
+  it("verifies anonymous sign-in claims and ignores a mismatched local user object", async () => {
     const { auth, client } = createClient();
     auth.signInAnonymously = jest.fn().mockResolvedValue({
-      data: { session: session("guest-b", true) },
+      data: {
+        session: session("forged-local-user", false),
+        user: { id: "forged-local-user", is_anonymous: false },
+      },
       error: null,
     });
+    auth.getClaims = jest.fn().mockResolvedValue(
+      verifiedClaims("verified-guest", true),
+    );
 
-    const result = await createSupabaseAuthAdapter(client).signInAnonymously();
+    const result = await createSupabaseAuthAdapter(
+      client,
+      sessionStorage,
+      authStorageKey,
+    ).signInAnonymously();
 
     expect(result).toEqual({
       ok: true,
-      identity: { userId: "guest-b", isAnonymous: true },
+      identity: { userId: "verified-guest", isAnonymous: true },
     });
-    expect(JSON.stringify(result)).not.toContain("access-token-that-must-never-leave-the-adapter");
+    expect(JSON.stringify(result)).not.toContain("forged-local-user");
+    expect(JSON.stringify(result)).not.toContain(
+      "access-token-that-must-never-leave-the-adapter",
+    );
+  });
+
+  it("does not publish anonymous identity when post-sign-in verification is unavailable", async () => {
+    const { auth, client } = createClient();
+    auth.signInAnonymously = jest.fn().mockResolvedValue({
+      data: {
+        session: session("unverified-local-user", true),
+        user: { id: "unverified-local-user", is_anonymous: true },
+      },
+      error: null,
+    });
+    auth.getClaims = jest.fn().mockResolvedValue({
+      data: null,
+      error: new AuthRetryableFetchError("jwks unavailable", 503),
+    });
+
+    await expect(
+      createSupabaseAuthAdapter(
+        client,
+        sessionStorage,
+        authStorageKey,
+      ).signInAnonymously(),
+    ).resolves.toEqual({ ok: false, kind: "network" });
+  });
+
+  it("rejects verified-claim responses without a subject", async () => {
+    const { auth, client } = createClient();
+    auth.getClaims = jest.fn().mockResolvedValue({
+      data: {
+        claims: { is_anonymous: true },
+        header: {},
+        signature: new Uint8Array(),
+      },
+      error: null,
+    });
+
+    await expect(
+      createSupabaseAuthAdapter(
+        client,
+        sessionStorage,
+        authStorageKey,
+      ).getCurrentIdentity(),
+    ).resolves.toEqual({ ok: false, kind: "auth" });
   });
 
   it("signs out locally and never returns a provider error", async () => {
@@ -159,7 +254,11 @@ describe("createSupabaseAuthAdapter", () => {
       .mockResolvedValueOnce({
         error: new AuthError("provider detail", 500, "unknown"),
       });
-    const adapter = createSupabaseAuthAdapter(client);
+    const adapter = createSupabaseAuthAdapter(
+      client,
+      sessionStorage,
+      authStorageKey,
+    );
 
     await expect(adapter.signOutLocal()).resolves.toEqual({ ok: true });
     await expect(adapter.signOutLocal()).resolves.toEqual({
@@ -167,5 +266,72 @@ describe("createSupabaseAuthAdapter", () => {
       kind: "auth",
     });
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it.each([
+    {
+      name: "malformed manifest",
+      seed(values: Map<string, string>) {
+        values.set("adaptive_core.adaptive-core-auth.manifest", "secret-value");
+      },
+    },
+    {
+      name: "missing committed chunk",
+      seed(values: Map<string, string>) {
+        values.set(
+          "adaptive_core.adaptive-core-auth.manifest",
+          JSON.stringify({ version: 1, generation: 1, chunks: 2 }),
+        );
+        values.set(
+          "adaptive_core.adaptive-core-auth.chunk.1.0",
+          "partial-secret",
+        );
+      },
+    },
+  ])("recovers end to end from $name before creating one guest", async ({ seed }) => {
+    const { backend, values } = createMemoryBackend();
+    seed(values);
+    const storage = createSecureSessionStorage(backend);
+    const auth = {
+      getClaims: jest.fn(async (token?: string) => {
+        if (token) {
+          return verifiedClaims("verified-guest", true);
+        }
+
+        const stored = await storage.getItem("adaptive-core-auth");
+        return stored === null
+          ? { data: null, error: null }
+          : verifiedClaims("unexpected-existing-user", false);
+      }),
+      signInAnonymously: jest.fn(async () => {
+        await storage.setItem("adaptive-core-auth", "stored-session");
+        return {
+          data: {
+            session: session("unverified-local-user", false),
+            user: { id: "unverified-local-user", is_anonymous: false },
+          },
+          error: null,
+        };
+      }),
+      signOut: jest.fn(async () => ({ error: null })),
+    } as unknown as AuthMethods;
+    const adapter = createSupabaseAuthAdapter(
+      { auth } as Pick<SupabaseClient<Database>, "auth">,
+      storage,
+      authStorageKey,
+    );
+    const service = createIdentityService(adapter);
+
+    await expect(service.restore()).resolves.toEqual({ status: "no_session" });
+    await expect(storage.getItem("adaptive-core-auth")).resolves.toBeNull();
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "verified-guest",
+    });
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "verified-guest",
+    });
+    expect(auth.signInAnonymously).toHaveBeenCalledTimes(1);
   });
 });

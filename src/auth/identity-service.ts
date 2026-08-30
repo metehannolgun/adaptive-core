@@ -52,6 +52,7 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
   const listeners = new Set<(next: IdentityState) => void>();
   let restoreRequest: Promise<IdentityState> | null = null;
   let guestRequest: Promise<IdentityState> | null = null;
+  let sessionAbsenceConfirmed = false;
 
   function publish(next: IdentityState): IdentityState {
     state = next;
@@ -75,25 +76,35 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
     let request!: Promise<IdentityState>;
     request = Promise.resolve()
       .then(() => {
+        sessionAbsenceConfirmed = false;
         publish({ status: "restoring" });
         return auth.getCurrentIdentity();
       })
       .then((result) => {
-        if (!result.ok && result.kind === "invalid_session") {
+        if (
+          !result.ok &&
+          (result.kind === "invalid_session" ||
+            result.kind === "corrupt_storage")
+        ) {
           return Promise.resolve()
             .then(() => auth.signOutLocal())
-            .then((signOut) =>
-              publish(
+            .then((signOut) => {
+              sessionAbsenceConfirmed = signOut.ok;
+              return publish(
                 signOut.ok
                   ? { status: "no_session" }
                   : { status: "error", code: "AUTH_UNAVAILABLE" },
-              ),
-            );
+              );
+            });
         }
 
+        sessionAbsenceConfirmed = result.ok && result.identity === null;
         return publish(resultToState(result));
       })
-      .catch(unavailable)
+      .catch(() => {
+        sessionAbsenceConfirmed = false;
+        return unavailable();
+      })
       .finally(() => {
         if (restoreRequest === request) {
           restoreRequest = null;
@@ -113,7 +124,17 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
       return restoreRequest.then((restoredState) =>
         restoredState.status === "guest" || restoredState.status === "permanent"
           ? restoredState
-          : ensureGuestSession(),
+          : restoredState.status === "no_session"
+            ? ensureGuestSession()
+            : restoredState,
+      );
+    }
+
+    if (!sessionAbsenceConfirmed) {
+      return restore().then((restoredState) =>
+        restoredState.status === "no_session"
+          ? ensureGuestSession()
+          : restoredState,
       );
     }
 
@@ -130,8 +151,18 @@ export function createIdentityService(auth: IdentityAuthPort): IdentityService {
     }
 
     request = Promise.resolve(signInRequest)
-      .then((result) => publish(resultToState(result as AuthPortResult)))
-      .catch(unavailable)
+      .then((result) => {
+        const authResult = result as AuthPortResult;
+        // Once an Auth request was attempted, the server may have created a
+        // session even if verification or local persistence reported failure.
+        // Require restoration before any later anonymous signup attempt.
+        sessionAbsenceConfirmed = false;
+        return publish(resultToState(authResult));
+      })
+      .catch(() => {
+        sessionAbsenceConfirmed = false;
+        return unavailable();
+      })
       .finally(() => {
         if (guestRequest === request) {
           guestRequest = null;

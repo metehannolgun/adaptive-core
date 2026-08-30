@@ -13,6 +13,7 @@ import type { Database } from "./database.types";
 
 export type ManagedSupabaseClient = {
   client: SupabaseClient<Database>;
+  authStorageKey: string;
   dispose(): void;
 };
 
@@ -41,12 +42,16 @@ export function createManagedSupabaseClient(
 ): ManagedSupabaseClient {
   const createSupabaseClient = dependencies.createClient ?? createClient;
   const appState = dependencies.appState ?? AppState;
+  // Match Supabase's project-scoped default so local, staging, and production
+  // sessions cannot overwrite one another on the same device.
+  const authStorageKey = `sb-${new URL(config.supabaseUrl).hostname.split(".")[0]}-auth-token`;
   const client = createSupabaseClient<Database>(
     config.supabaseUrl,
     config.supabasePublishableKey,
     {
       auth: {
         storage,
+        storageKey: authStorageKey,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
@@ -75,6 +80,7 @@ export function createManagedSupabaseClient(
 
   return {
     client,
+    authStorageKey,
     dispose() {
       if (disposed) {
         return;

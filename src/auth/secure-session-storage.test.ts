@@ -79,6 +79,21 @@ describe("createSecureSessionStorage", () => {
     expect(JSON.stringify(failure)).not.toContain("secret-value");
   });
 
+  it("invalidates a malformed manifest without trusting its contents", async () => {
+    const { backend, values } = createMemoryBackend();
+    values.set("adaptive_core.sb-project-auth-token.manifest", "secret-value");
+    values.set("adaptive_core.sb-project-auth-token.chunk.1.0", "stale-one");
+    values.set("adaptive_core.sb-project-auth-token.chunk.2.0", "stale-two");
+    const storage = createSecureSessionStorage(backend);
+
+    await expect(
+      storage.removeItem("sb-project-auth-token"),
+    ).resolves.toBeUndefined();
+
+    expect(values.size).toBe(0);
+    await expect(storage.getItem("sb-project-auth-token")).resolves.toBeNull();
+  });
+
   it("keeps the previous committed generation visible during a write", async () => {
     const { backend, values } = createMemoryBackend();
     const storage = createSecureSessionStorage(backend);
@@ -141,6 +156,31 @@ describe("createSecureSessionStorage", () => {
     await expect(pendingRead).resolves.toBe(secondValue);
   });
 
+  it("does not return a session removed while its chunks were being read", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+
+    await storage.setItem("sb-project-auth-token", "existing-session");
+
+    const chunkReadStarted = createDeferred();
+    const finishChunkRead = createDeferred();
+    backend.getItemAsync = jest.fn(async (key) => {
+      const value = values.get(key) ?? null;
+      if (key === "adaptive_core.sb-project-auth-token.chunk.1.0") {
+        chunkReadStarted.resolve();
+        await finishChunkRead.promise;
+      }
+      return value;
+    });
+
+    const pendingRead = storage.getItem("sb-project-auth-token");
+    await chunkReadStarted.promise;
+    await storage.removeItem("sb-project-auth-token");
+    finishChunkRead.resolve();
+
+    await expect(pendingRead).resolves.toBeNull();
+  });
+
   it("removes failed candidate-generation chunks before logout", async () => {
     const { backend, values } = createMemoryBackend();
     const storage = createSecureSessionStorage(backend);
@@ -194,6 +234,73 @@ describe("createSecureSessionStorage", () => {
       [...values.keys()].some((key) => key.includes(".chunk.2.")),
     ).toBe(false);
     expect(values.size).toBe(0);
+  });
+
+  it("reports a published write as committed when stale cleanup fails", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+
+    await storage.setItem("sb-project-auth-token", "first-session");
+
+    let failStaleCleanup = true;
+    backend.deleteItemAsync = jest.fn(async (key) => {
+      if (
+        failStaleCleanup &&
+        key.startsWith("adaptive_core.sb-project-auth-token.chunk.1.")
+      ) {
+        throw new Error("raw-secret");
+      }
+      values.delete(key);
+    });
+
+    await expect(
+      storage.setItem("sb-project-auth-token", "second-session"),
+    ).resolves.toBeUndefined();
+    await expect(storage.getItem("sb-project-auth-token")).resolves.toBe(
+      "second-session",
+    );
+
+    failStaleCleanup = false;
+    await storage.removeItem("sb-project-auth-token");
+    expect(values.size).toBe(0);
+  });
+
+  it("reuses two bounded generation slots and clears stale fragments before reuse", async () => {
+    const { backend, values } = createMemoryBackend();
+    const storage = createSecureSessionStorage(backend);
+
+    await storage.setItem("sb-project-auth-token", "x".repeat(2_000));
+
+    let failStaleCleanup = true;
+    backend.deleteItemAsync = jest.fn(async (key) => {
+      if (
+        failStaleCleanup &&
+        key.startsWith("adaptive_core.sb-project-auth-token.chunk.1.")
+      ) {
+        throw new Error("raw-secret");
+      }
+      values.delete(key);
+    });
+
+    await storage.setItem("sb-project-auth-token", "second-session");
+    expect(
+      values.has("adaptive_core.sb-project-auth-token.chunk.1.1"),
+    ).toBe(true);
+
+    failStaleCleanup = false;
+    await storage.setItem("sb-project-auth-token", "third-session");
+
+    expect(
+      values.has("adaptive_core.sb-project-auth-token.chunk.1.1"),
+    ).toBe(false);
+    expect(
+      [...values.keys()]
+        .filter((key) => key.includes(".chunk."))
+        .every((key) => /\.chunk\.(1|2)\./.test(key)),
+    ).toBe(true);
+    await expect(storage.getItem("sb-project-auth-token")).resolves.toBe(
+      "third-session",
+    );
   });
 
   it("hides native failures behind a stable storage error", async () => {

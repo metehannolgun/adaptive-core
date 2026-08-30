@@ -6,6 +6,10 @@ import {
   createIdentityService,
   type IdentityState,
 } from "./identity-service";
+import {
+  createSecureSessionStorage,
+  type SecureStoreBackend,
+} from "./secure-session-storage";
 
 function createAuthPort(): jest.Mocked<IdentityAuthPort> {
   return {
@@ -91,6 +95,19 @@ describe("createIdentityService", () => {
     });
   });
 
+  it("clears corrupt local storage before confirming that no session exists", async () => {
+    const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({
+      ok: false,
+      kind: "corrupt_storage",
+    });
+    auth.signOutLocal.mockResolvedValue({ ok: true });
+    const service = createIdentityService(auth);
+
+    await expect(service.restore()).resolves.toEqual({ status: "no_session" });
+    expect(auth.signOutLocal).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a guest from no session and retries successfully from offline", async () => {
     const auth = createAuthPort();
     auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
@@ -113,6 +130,56 @@ describe("createIdentityService", () => {
     expect(auth.signInAnonymously).toHaveBeenCalledTimes(2);
   });
 
+  it("restores after an unverified sign-in result before creating another guest", async () => {
+    const auth = createAuthPort();
+    auth.getCurrentIdentity
+      .mockResolvedValueOnce({ ok: true, identity: null })
+      .mockResolvedValueOnce({
+        ok: true,
+        identity: { userId: "guest-created-on-server", isAnonymous: true },
+      });
+    auth.signInAnonymously.mockResolvedValue({ ok: false, kind: "network" });
+    const service = createIdentityService(auth);
+
+    await service.restore();
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "offline",
+    });
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "guest-created-on-server",
+    });
+
+    expect(auth.getCurrentIdentity).toHaveBeenCalledTimes(2);
+    expect(auth.signInAnonymously).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    {
+      identity: { userId: "guest-recovered", isAnonymous: true },
+      expected: { status: "guest", userId: "guest-recovered" },
+    },
+    {
+      identity: { userId: "member-recovered", isAnonymous: false },
+      expected: { status: "permanent", userId: "member-recovered" },
+    },
+  ] as const)(
+    "retries an offline restore before deciding whether $expected.status needs a guest",
+    async ({ identity, expected }) => {
+      const auth = createAuthPort();
+      auth.getCurrentIdentity
+        .mockResolvedValueOnce({ ok: false, kind: "network" })
+        .mockResolvedValueOnce({ ok: true, identity });
+      const service = createIdentityService(auth);
+
+      await expect(service.restore()).resolves.toEqual({ status: "offline" });
+      await expect(service.ensureGuestSession()).resolves.toEqual(expected);
+
+      expect(auth.getCurrentIdentity).toHaveBeenCalledTimes(2);
+      expect(auth.signInAnonymously).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     { status: "guest", userId: "guest-a" },
     { status: "permanent", userId: "member-a" },
@@ -134,6 +201,7 @@ describe("createIdentityService", () => {
 
   it("shares one anonymous Auth request between concurrent callers", async () => {
     const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
     let resolveSignIn!: (value: Awaited<ReturnType<IdentityAuthPort["signInAnonymously"]>>) => void;
     auth.signInAnonymously.mockImplementation(
       () =>
@@ -142,6 +210,7 @@ describe("createIdentityService", () => {
         }),
     );
     const service = createIdentityService(auth);
+    await service.restore();
 
     const first = service.ensureGuestSession();
     const second = service.ensureGuestSession();
@@ -267,6 +336,7 @@ describe("createIdentityService", () => {
 
   it("contains a rejected anonymous sign-in and clears its retry handle", async () => {
     const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
     auth.signInAnonymously
       .mockRejectedValueOnce(new Error("provider detail with access token"))
       .mockResolvedValueOnce({
@@ -274,6 +344,7 @@ describe("createIdentityService", () => {
         identity: { userId: "guest-after-rejection", isAnonymous: true },
       });
     const service = createIdentityService(auth);
+    await service.restore();
 
     await expect(service.ensureGuestSession()).resolves.toEqual({
       status: "error",
@@ -288,10 +359,12 @@ describe("createIdentityService", () => {
 
   it("contains a malformed anonymous sign-in return without throwing", async () => {
     const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
     auth.signInAnonymously.mockImplementation(
       () => undefined as unknown as Promise<AuthPortResult>,
     );
     const service = createIdentityService(auth);
+    await service.restore();
     let request!: Promise<IdentityState>;
 
     expect(() => {
@@ -305,12 +378,61 @@ describe("createIdentityService", () => {
 
   it("maps a non-network anonymous Auth failure to a stable error", async () => {
     const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
     auth.signInAnonymously.mockResolvedValue({ ok: false, kind: "auth" });
 
-    await expect(createIdentityService(auth).ensureGuestSession()).resolves.toEqual({
+    const service = createIdentityService(auth);
+    await service.restore();
+
+    await expect(service.ensureGuestSession()).resolves.toEqual({
       status: "error",
       code: "AUTH_UNAVAILABLE",
     });
+  });
+
+  it("does not retry anonymous signup after its session commit succeeds", async () => {
+    const values = new Map<string, string>();
+    let failStaleCleanup = false;
+    const backend: SecureStoreBackend = {
+      getItemAsync: jest.fn(async (key) => values.get(key) ?? null),
+      setItemAsync: jest.fn(async (key, value) => {
+        values.set(key, value);
+      }),
+      deleteItemAsync: jest.fn(async (key) => {
+        if (
+          failStaleCleanup &&
+          key.startsWith("adaptive_core.adaptive-core-auth.chunk.1.")
+        ) {
+          throw new Error("raw-secret");
+        }
+        values.delete(key);
+      }),
+    };
+    const storage = createSecureSessionStorage(backend);
+    await storage.setItem("adaptive-core-auth", "previous-session");
+    failStaleCleanup = true;
+
+    const auth = createAuthPort();
+    auth.getCurrentIdentity.mockResolvedValue({ ok: true, identity: null });
+    auth.signInAnonymously.mockImplementation(async () => {
+      await storage.setItem("adaptive-core-auth", "new-guest-session");
+      return {
+        ok: true,
+        identity: { userId: "guest-committed", isAnonymous: true },
+      };
+    });
+    const service = createIdentityService(auth);
+
+    await service.restore();
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "guest-committed",
+    });
+    await expect(service.ensureGuestSession()).resolves.toEqual({
+      status: "guest",
+      userId: "guest-committed",
+    });
+    expect(auth.signInAnonymously).toHaveBeenCalledTimes(1);
   });
 
   it("notifies subscribers with state objects only and stops after unsubscribe", async () => {

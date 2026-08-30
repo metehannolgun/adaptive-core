@@ -17,6 +17,7 @@ type IdentityBootstrapProps = PropsWithChildren<{
 }>;
 
 const retryDelays = [1_000, 3_000, 10_000];
+type RetryOperation = "restore" | "guest";
 const IdentityStateContext = createContext<IdentityState | null>(null);
 
 function authUnavailableState(): IdentityState {
@@ -43,7 +44,7 @@ export function IdentityBootstrap({
       }
     }
 
-    function scheduleRetry() {
+    function scheduleRetry(operation: RetryOperation) {
       if (!mounted || retryCount >= retryDelays.length) {
         return;
       }
@@ -52,15 +53,48 @@ export function IdentityBootstrap({
       retryCount += 1;
       retryTimer = setTimeout(() => {
         retryTimer = null;
-        requestGuestSession();
+        if (operation === "restore") {
+          requestRestore();
+        } else {
+          requestGuestSession();
+        }
       }, delay);
     }
 
     function handleGuestResult(result: IdentityState) {
       updateState(result);
       if (result.status === "offline") {
-        scheduleRetry();
+        scheduleRetry("guest");
       }
+    }
+
+    function handleRestoreResult(result: IdentityState) {
+      updateState(result);
+      if (result.status === "offline") {
+        // Offline restore may still represent an existing guest or permanent
+        // session, so recover it before anonymous account creation is allowed.
+        scheduleRetry("restore");
+      } else if (result.status === "no_session") {
+        requestGuestSession();
+      }
+    }
+
+    function requestRestore() {
+      if (!mounted) {
+        return;
+      }
+
+      let request: Promise<IdentityState>;
+      try {
+        request = service.restore();
+      } catch {
+        handleRestoreResult(authUnavailableState());
+        return;
+      }
+
+      void request.then(handleRestoreResult).catch(() => {
+        handleRestoreResult(authUnavailableState());
+      });
     }
 
     function requestGuestSession() {
@@ -92,14 +126,7 @@ export function IdentityBootstrap({
 
     void restoreRequest
       .then((restoredState) => {
-        updateState(restoredState);
-        if (
-          mounted &&
-          (restoredState.status === "no_session" ||
-            restoredState.status === "offline")
-        ) {
-          requestGuestSession();
-        }
+        handleRestoreResult(restoredState);
       })
       .catch(() => {
         updateState(authUnavailableState());
